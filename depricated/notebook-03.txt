@@ -1,0 +1,1444 @@
+{
+ "cells": [
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# Manufacturing Expansion Model - Equipment Utilization\n",
+    "\n",
+    "This notebook implements equipment capacity planning and utilization modeling for the manufacturing expansion model.\n",
+    "\n",
+    "## Tasks:\n",
+    "1. Create equipment capacity planning logic\n",
+    "2. Implement equipment utilization visualization \n",
+    "3. Build bottleneck identification system\n",
+    "4. Add shift modeling and overtime cost calculations"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## Setup and Dependencies"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import sys\n",
+    "import pandas as pd\n",
+    "import numpy as np\n",
+    "import matplotlib.pyplot as plt\n",
+    "import seaborn as sns\n",
+    "from pathlib import Path\n",
+    "import json\n",
+    "\n",
+    "# Add the project directory to the Python path\n",
+    "base_dir = Path('./manufacturing_model')\n",
+    "if str(base_dir) not in sys.path:\n",
+    "    sys.path.append(str(base_dir))\n",
+    "\n",
+    "# Import our models\n",
+    "from models import (\n",
+    "    Scenario, Equipment, Product, CostDriver, FinancialProjection,\n",
+    "    get_session, create_tables\n",
+    ")\n",
+    "\n",
+    "# Ensure tables exist\n",
+    "create_tables()\n",
+    "\n",
+    "# Get a database session\n",
+    "session = get_session()\n",
+    "\n",
+    "# Set up plotting\n",
+    "sns.set_theme(style=\"whitegrid\")\n",
+    "plt.rcParams[\"figure.figsize\"] = (12, 8)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## Create Equipment Service Module\n",
+    "\n",
+    "Let's first create our equipment service module that will handle equipment capacity planning and utilization analysis."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Create the equipment_service.py module\n",
+    "with open(base_dir / 'services' / 'equipment_service.py', 'w') as f:\n",
+    "    f.write(\"\"\"\n",
+    "# Equipment capacity and utilization service\n",
+    "import numpy as np\n",
+    "import pandas as pd\n",
+    "from datetime import datetime\n",
+    "from sqlalchemy import and_\n",
+    "from ..models import (\n",
+    "    Scenario, Equipment, Product, CostDriver, FinancialProjection,\n",
+    "    get_session\n",
+    ")\n",
+    "\n",
+    "def calculate_production_capacity(equipment_id, year=None):\n",
+    "    \"\"\"Calculate the maximum production capacity for a piece of equipment\"\"\"\n",
+    "    session = get_session()\n",
+    "    equipment = session.query(Equipment).filter(Equipment.id == equipment_id).first()\n",
+    "    \n",
+    "    if not equipment:\n",
+    "        return {\"error\": f\"Equipment with ID {equipment_id} not found\"}\n",
+    "    \n",
+    "    # Skip if equipment hasn't been purchased yet\n",
+    "    if year and equipment.purchase_year > year:\n",
+    "        return {\n",
+    "            \"equipment_id\": equipment_id,\n",
+    "            \"equipment_name\": equipment.name,\n",
+    "            \"max_capacity\": 0,\n",
+    "            \"available_capacity\": 0,\n",
+    "            \"status\": \"not purchased\"\n",
+    "        }\n",
+    "    \n",
+    "    # Calculate available capacity adjusted for availability percentage\n",
+    "    max_capacity = equipment.max_capacity\n",
+    "    available_capacity = max_capacity * equipment.availability_pct\n",
+    "    \n",
+    "    return {\n",
+    "        \"equipment_id\": equipment_id,\n",
+    "        \"equipment_name\": equipment.name,\n",
+    "        \"max_capacity\": max_capacity,\n",
+    "        \"available_capacity\": available_capacity,\n",
+    "        \"status\": \"active\"\n",
+    "    }\n",
+    "\n",
+    "def calculate_equipment_utilization_by_product(scenario_id, year):\n",
+    "    \"\"\"Calculate detailed equipment utilization broken down by product\"\"\"\n",
+    "    session = get_session()\n",
+    "    scenario = session.query(Scenario).filter(Scenario.id == scenario_id).first()\n",
+    "    \n",
+    "    if not scenario:\n",
+    "        return {\"error\": f\"Scenario with ID {scenario_id} not found\"}\n",
+    "    \n",
+    "    # Get all equipment for this scenario\n",
+    "    equipment_list = session.query(Equipment).filter(Equipment.scenario_id == scenario_id).all()\n",
+    "    \n",
+    "    # Get all products for this scenario\n",
+    "    products = session.query(Product).filter(Product.scenario_id == scenario_id).all()\n",
+    "    \n",
+    "    # Initialize result structure\n",
+    "    result = {\n",
+    "        \"equipment\": {},\n",
+    "        \"bottlenecks\": [],\n",
+    "        \"unutilized_capacity\": []\n",
+    "    }\n",
+    "    \n",
+    "    # Calculate production volume for each product in this year\n",
+    "    product_volumes = {}\n",
+    "    for product in products:\n",
+    "        # Skip if product hasn't been introduced yet\n",
+    "        if product.introduction_year > year:\n",
+    "            continue\n",
+    "            \n",
+    "        # Calculate years since introduction\n",
+    "        years_since_intro = year - product.introduction_year\n",
+    "        \n",
+    "        # Calculate production volume using compound growth\n",
+    "        volume = product.initial_units * ((1 + product.growth_rate) ** years_since_intro)\n",
+    "        product_volumes[product.id] = {\n",
+    "            \"product_name\": product.name,\n",
+    "            \"volume\": volume\n",
+    "        }\n",
+    "    \n",
+    "    # Calculate utilization for each equipment\n",
+    "    for equipment in equipment_list:\n",
+    "        # Skip if equipment hasn't been purchased yet\n",
+    "        if equipment.purchase_year > year:\n",
+    "            continue\n",
+    "            \n",
+    "        equipment_capacity = calculate_production_capacity(equipment.id, year)\n",
+    "        available_hours = equipment_capacity[\"available_capacity\"]\n",
+    "        \n",
+    "        # Initialize equipment data in result\n",
+    "        result[\"equipment\"][equipment.id] = {\n",
+    "            \"equipment_name\": equipment.name,\n",
+    "            \"max_capacity\": equipment_capacity[\"max_capacity\"],\n",
+    "            \"available_capacity\": available_hours,\n",
+    "            \"used_capacity\": 0,\n",
+    "            \"utilization_pct\": 0,\n",
+    "            \"products\": {}\n",
+    "        }\n",
+    "        \n",
+    "        # Calculate hours used by each product on this equipment\n",
+    "        for product_id, product_data in product_volumes.items():\n",
+    "            product_name = product_data[\"product_name\"]\n",
+    "            volume = product_data[\"volume\"]\n",
+    "            \n",
+    "            # Get cost driver for this product-equipment combination\n",
+    "            cost_driver = session.query(CostDriver).filter(\n",
+    "                CostDriver.product_id == product_id,\n",
+    "                CostDriver.equipment_id == equipment.id\n",
+    "            ).first()\n",
+    "            \n",
+    "            if cost_driver:\n",
+    "                hours_used = volume * cost_driver.hours_per_unit\n",
+    "                \n",
+    "                # Add to total used capacity\n",
+    "                result[\"equipment\"][equipment.id][\"used_capacity\"] += hours_used\n",
+    "                \n",
+    "                # Add product-specific usage data\n",
+    "                result[\"equipment\"][equipment.id][\"products\"][product_id] = {\n",
+    "                    \"product_name\": product_name,\n",
+    "                    \"volume\": volume,\n",
+    "                    \"hours_per_unit\": cost_driver.hours_per_unit,\n",
+    "                    \"hours_used\": hours_used,\n",
+    "                    \"capacity_pct\": (hours_used / available_hours) * 100 if available_hours > 0 else 0\n",
+    "                }\n",
+    "        \n",
+    "        # Calculate overall utilization percentage for this equipment\n",
+    "        used_hours = result[\"equipment\"][equipment.id][\"used_capacity\"]\n",
+    "        utilization_pct = (used_hours / available_hours) * 100 if available_hours > 0 else 0\n",
+    "        result[\"equipment\"][equipment.id][\"utilization_pct\"] = utilization_pct\n",
+    "        \n",
+    "        # Check if this is a bottleneck\n",
+    "        if utilization_pct > 85:\n",
+    "            result[\"bottlenecks\"].append({\n",
+    "                \"equipment_id\": equipment.id,\n",
+    "                \"equipment_name\": equipment.name,\n",
+    "                \"utilization_pct\": utilization_pct,\n",
+    "                \"severity\": \"high\" if utilization_pct > 95 else \"medium\"\n",
+    "            })\n",
+    "        \n",
+    "        # Check if this has significant unutilized capacity\n",
+    "        if utilization_pct < 50:\n",
+    "            result[\"unutilized_capacity\"].append({\n",
+    "                \"equipment_id\": equipment.id,\n",
+    "                \"equipment_name\": equipment.name,\n",
+    "                \"utilization_pct\": utilization_pct,\n",
+    "                \"unused_hours\": available_hours - used_hours\n",
+    "            })\n",
+    "    \n",
+    "    return result\n",
+    "\n",
+    "def identify_capacity_constraints(scenario_id, start_year, end_year):\n",
+    "    \"\"\"Identify capacity constraints and bottlenecks over a time period\"\"\"\n",
+    "    session = get_session()\n",
+    "    scenario = session.query(Scenario).filter(Scenario.id == scenario_id).first()\n",
+    "    \n",
+    "    if not scenario:\n",
+    "        return {\"error\": f\"Scenario with ID {scenario_id} not found\"}\n",
+    "    \n",
+    "    # Initialize result\n",
+    "    result = {\n",
+    "        \"bottlenecks_by_year\": {},\n",
+    "        \"equipment_utilization_trend\": {},\n",
+    "        \"capacity_expansion_recommendations\": []\n",
+    "    }\n",
+    "    \n",
+    "    # Get all equipment\n",
+    "    equipment_list = session.query(Equipment).filter(Equipment.scenario_id == scenario_id).all()\n",
+    "    equipment_ids = [e.id for e in equipment_list]\n",
+    "    \n",
+    "    # Track utilization trends for each equipment over the years\n",
+    "    utilization_trends = {e.id: {\n",
+    "        \"equipment_name\": e.name,\n",
+    "        \"years\": [],\n",
+    "        \"utilization\": []\n",
+    "    } for e in equipment_list}\n",
+    "    \n",
+    "    # Analyze each year\n",
+    "    for year in range(start_year, end_year + 1):\n",
+    "        # Calculate utilization for this year\n",
+    "        utilization = calculate_equipment_utilization_by_product(scenario_id, year)\n",
+    "        \n",
+    "        # Store bottlenecks\n",
+    "        if utilization[\"bottlenecks\"]:\n",
+    "            result[\"bottlenecks_by_year\"][year] = utilization[\"bottlenecks\"]\n",
+    "        \n",
+    "        # Update utilization trends\n",
+    "        for eq_id, eq_data in utilization[\"equipment\"].items():\n",
+    "            if eq_id in utilization_trends:\n",
+    "                utilization_trends[eq_id][\"years\"].append(year)\n",
+    "                utilization_trends[eq_id][\"utilization\"].append(eq_data[\"utilization_pct\"])\n",
+    "    \n",
+    "    # Store utilization trends in result\n",
+    "    result[\"equipment_utilization_trend\"] = utilization_trends\n",
+    "    \n",
+    "    # Generate capacity expansion recommendations\n",
+    "    for eq_id, trend in utilization_trends.items():\n",
+    "        if not trend[\"utilization\"]:\n",
+    "            continue\n",
+    "            \n",
+    "        # Look for consistently high utilization\n",
+    "        if any(util >= 85 for util in trend[\"utilization\"]):\n",
+    "            years_over_threshold = [\n",
+    "                trend[\"years\"][i] for i, util in enumerate(trend[\"utilization\"]) \n",
+    "                if util >= 85\n",
+    "            ]\n",
+    "            \n",
+    "            if years_over_threshold:\n",
+    "                first_year_over = min(years_over_threshold)\n",
+    "                \n",
+    "                # Get equipment details\n",
+    "                equipment = session.query(Equipment).filter(Equipment.id == eq_id).first()\n",
+    "                \n",
+    "                # Add recommendation\n",
+    "                result[\"capacity_expansion_recommendations\"].append({\n",
+    "                    \"equipment_id\": eq_id,\n",
+    "                    \"equipment_name\": trend[\"equipment_name\"],\n",
+    "                    \"constraint_year\": first_year_over,\n",
+    "                    \"recommendation\": \"Add additional capacity\",\n",
+    "                    \"details\": f\"Utilization exceeds 85% in year {first_year_over}. Consider purchasing additional {trend['equipment_name']} equipment.\",\n",
+    "                    \"estimated_cost\": equipment.cost if equipment else \"Unknown\"\n",
+    "                })\n",
+    "    \n",
+    "    return result\n",
+    "\n",
+    "def model_shift_operations(scenario_id, year, shift_config=None):\n",
+    "    \"\"\"Model shift operations including overtime costs for a specific year\"\"\"\n",
+    "    session = get_session()\n",
+    "    \n",
+    "    # Default shift configuration\n",
+    "    if shift_config is None:\n",
+    "        shift_config = {\n",
+    "            \"shifts_per_day\": 1,\n",
+    "            \"hours_per_shift\": 8,\n",
+    "            \"days_per_week\": 5,\n",
+    "            \"weeks_per_year\": 50,\n",
+    "            \"overtime_multiplier\": 1.5,\n",
+    "            \"max_overtime_hours_per_week\": 10\n",
+    "        }\n",
+    "    \n",
+    "    # Calculate available hours per year under this shift configuration\n",
+    "    standard_hours_per_year = (\n",
+    "        shift_config[\"shifts_per_day\"] * \n",
+    "        shift_config[\"hours_per_shift\"] * \n",
+    "        shift_config[\"days_per_week\"] * \n",
+    "        shift_config[\"weeks_per_year\"]\n",
+    "    )\n",
+    "    \n",
+    "    max_overtime_hours_per_year = (\n",
+    "        shift_config[\"max_overtime_hours_per_week\"] * \n",
+    "        shift_config[\"weeks_per_year\"]\n",
+    "    )\n",
+    "    \n",
+    "    # Get equipment utilization\n",
+    "    utilization = calculate_equipment_utilization_by_product(scenario_id, year)\n",
+    "    \n",
+    "    if \"error\" in utilization:\n",
+    "        return utilization\n",
+    "    \n",
+    "    # Initialize result\n",
+    "    result = {\n",
+    "        \"standard_hours_per_year\": standard_hours_per_year,\n",
+    "        \"max_overtime_hours_per_year\": max_overtime_hours_per_year,\n",
+    "        \"equipment_shift_analysis\": {},\n",
+    "        \"total_overtime_cost\": 0,\n",
+    "        \"shift_recommendations\": []\n",
+    "    }\n",
+    "    \n",
+    "    # Analyze each equipment\n",
+    "    total_overtime_cost = 0\n",
+    "    for eq_id, eq_data in utilization[\"equipment\"].items():\n",
+    "        equipment = session.query(Equipment).filter(Equipment.id == eq_id).first()\n",
+    "        if not equipment:\n",
+    "            continue\n",
+    "            \n",
+    "        # Calculate required hours vs standard hours\n",
+    "        required_hours = eq_data[\"used_capacity\"]\n",
+    "        overtime_hours = max(0, required_hours - standard_hours_per_year)\n",
+    "        \n",
+    "        # Calculate if we need multiple shifts\n",
+    "        required_shifts = required_hours / standard_hours_per_year\n",
+    "        \n",
+    "        # Limit overtime to maximum allowed\n",
+    "        overtime_hours = min(overtime_hours, max_overtime_hours_per_year)\n",
+    "        \n",
+    "        # Calculate overtime cost\n",
+    "        # Get the average hourly cost for this equipment\n",
+    "        total_product_hours = 0\n",
+    "        total_cost = 0\n",
+    "        \n",
+    "        for prod_id, prod_data in eq_data[\"products\"].items():\n",
+    "            cost_driver = session.query(CostDriver).filter(\n",
+    "                CostDriver.product_id == prod_id,\n",
+    "                CostDriver.equipment_id == eq_id\n",
+    "            ).first()\n",
+    "            \n",
+    "            if cost_driver:\n",
+    "                hours = prod_data[\"hours_used\"]\n",
+    "                hourly_cost = cost_driver.cost_per_hour\n",
+    "                total_product_hours += hours\n",
+    "                total_cost += hours * hourly_cost\n",
+    "        \n",
+    "        avg_hourly_cost = total_cost / total_product_hours if total_product_hours > 0 else 0\n",
+    "        overtime_cost = overtime_hours * avg_hourly_cost * shift_config[\"overtime_multiplier\"]\n",
+    "        \n",
+    "        # Add to total overtime cost\n",
+    "        total_overtime_cost += overtime_cost\n",
+    "        \n",
+    "        # Store analysis for this equipment\n",
+    "        result[\"equipment_shift_analysis\"][eq_id] = {\n",
+    "            \"equipment_name\": eq_data[\"equipment_name\"],\n",
+    "            \"standard_hours\": standard_hours_per_year,\n",
+    "            \"required_hours\": required_hours,\n",
+    "            \"overtime_hours\": overtime_hours,\n",
+    "            \"required_shifts\": required_shifts,\n",
+    "            \"overtime_cost\": overtime_cost,\n",
+    "            \"status\": (\n",
+    "                \"overloaded\" if required_hours > (standard_hours_per_year + max_overtime_hours_per_year)\n",
+    "                else \"overtime\" if overtime_hours > 0\n",
+    "                else \"normal\"\n",
+    "            )\n",
+    "        }\n",
+    "        \n",
+    "        # Generate shift recommendations\n",
+    "        if required_shifts > 1.1:  # If we need more than 1.1 shifts\n",
+    "            recommended_shifts = int(np.ceil(required_shifts))\n",
+    "            result[\"shift_recommendations\"].append({\n",
+    "                \"equipment_id\": eq_id,\n",
+    "                \"equipment_name\": eq_data[\"equipment_name\"],\n",
+    "                \"current_shifts\": shift_config[\"shifts_per_day\"],\n",
+    "                \"recommended_shifts\": recommended_shifts,\n",
+    "                \"reason\": f\"Utilization requires {required_shifts:.2f} shifts\"\n",
+    "            })\n",
+    "    \n",
+    "    # Store total overtime cost\n",
+    "    result[\"total_overtime_cost\"] = total_overtime_cost\n",
+    "    \n",
+    "    return result\n",
+    "\n",
+    "def optimize_equipment_purchases(scenario_id, budget_constraint=None, start_year=None, optimization_years=5):\n",
+    "    \"\"\"Optimize equipment purchases under budget constraints\"\"\"\n",
+    "    session = get_session()\n",
+    "    scenario = session.query(Scenario).filter(Scenario.id == scenario_id).first()\n",
+    "    \n",
+    "    if not scenario:\n",
+    "        return {\"error\": f\"Scenario with ID {scenario_id} not found\"}\n",
+    "    \n",
+    "    # Set default start year if not provided\n",
+    "    if start_year is None:\n",
+    "        start_year = 2025\n",
+    "    \n",
+    "    end_year = start_year + optimization_years - 1\n",
+    "    \n",
+    "    # Get capacity constraints analysis\n",
+    "    constraints = identify_capacity_constraints(scenario_id, start_year, end_year)\n",
+    "    \n",
+    "    if \"error\" in constraints:\n",
+    "        return constraints\n",
+    "    \n",
+    "    # Extract bottlenecked equipment and years\n",
+    "    bottlenecks = {}\n",
+    "    for year, bottleneck_list in constraints[\"bottlenecks_by_year\"].items():\n",
+    "        for bottleneck in bottleneck_list:\n",
+    "            eq_id = bottleneck[\"equipment_id\"]\n",
+    "            if eq_id not in bottlenecks or bottlenecks[eq_id][\"year\"] > year:\n",
+    "                bottlenecks[eq_id] = {\n",
+    "                    \"equipment_id\": eq_id,\n",
+    "                    \"equipment_name\": bottleneck[\"equipment_name\"],\n",
+    "                    \"year\": year,\n",
+    "                    \"utilization_pct\": bottleneck[\"utilization_pct\"]\n",
+    "                }\n",
+    "    \n",
+    "    # Sort bottlenecks by year and then by utilization percentage\n",
+    "    sorted_bottlenecks = sorted(\n",
+    "        bottlenecks.values(),\n",
+    "        key=lambda x: (x[\"year\"], -x[\"utilization_pct\"])\n",
+    "    )\n",
+    "    \n",
+    "    # Get current equipment information\n",
+    "    equipment_info = {}\n",
+    "    for eq_id in bottlenecks:\n",
+    "        equipment = session.query(Equipment).filter(Equipment.id == eq_id).first()\n",
+    "        if equipment:\n",
+    "            equipment_info[eq_id] = {\n",
+    "                \"equipment_id\": eq_id,\n",
+    "                \"name\": equipment.name,\n",
+    "                \"cost\": equipment.cost,\n",
+    "                \"max_capacity\": equipment.max_capacity\n",
+    "            }\n",
+    "    \n",
+    "    # Initialize optimization result\n",
+    "    result = {\n",
+    "        \"budget_constraint\": budget_constraint,\n",
+    "        \"equipment_purchase_plan\": {},\n",
+    "        \"total_cost\": 0,\n",
+    "        \"bottlenecks_addressed\": 0,\n",
+    "        \"bottlenecks_remaining\": []\n",
+    "    }\n",
+    "    \n",
+    "    # Simulate equipment purchases with budget constraint\n",
+    "    remaining_budget = budget_constraint\n",
+    "    for bottleneck in sorted_bottlenecks:\n",
+    "        eq_id = bottleneck[\"equipment_id\"]\n",
+    "        \n",
+    "        if eq_id not in equipment_info:\n",
+    "            continue\n",
+    "            \n",
+    "        equipment = equipment_info[eq_id]\n",
+    "        purchase_year = bottleneck[\"year\"]\n",
+    "        \n",
+    "        # Check if we have budget for this equipment\n",
+    "        if budget_constraint is None or equipment[\"cost\"] <= remaining_budget:\n",
+    "            # We can purchase this equipment\n",
+    "            if purchase_year not in result[\"equipment_purchase_plan\"]:\n",
+    "                result[\"equipment_purchase_plan\"][purchase_year] = []\n",
+    "            \n",
+    "            result[\"equipment_purchase_plan\"][purchase_year].append({\n",
+    "                \"equipment_id\": eq_id,\n",
+    "                \"equipment_name\": equipment[\"name\"],\n",
+    "                \"cost\": equipment[\"cost\"],\n",
+    "                \"capacity_added\": equipment[\"max_capacity\"]\n",
+    "            })\n",
+    "            \n",
+    "            result[\"total_cost\"] += equipment[\"cost\"]\n",
+    "            result[\"bottlenecks_addressed\"] += 1\n",
+    "            \n",
+    "            if budget_constraint is not None:\n",
+    "                remaining_budget -= equipment[\"cost\"]\n",
+    "        else:\n",
+    "            # We don't have budget for this equipment\n",
+    "            result[\"bottlenecks_remaining\"].append(bottleneck)\n",
+    "    \n",
+    "    return result\n",
+    "\"\"\")\n",
+    "    \n",
+    "print(\"Equipment service module created.\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## Test Equipment Utilization Functions\n",
+    "\n",
+    "Let's test our equipment utilization functions with the base scenario."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "from services.equipment_service import (\n",
+    "    calculate_production_capacity,\n",
+    "    calculate_equipment_utilization_by_product,\n",
+    "    identify_capacity_constraints,\n",
+    "    model_shift_operations,\n",
+    "    optimize_equipment_purchases\n",
+    ")\n",
+    "\n",
+    "# Get the base scenario\n",
+    "base_scenario = session.query(Scenario).filter(Scenario.is_base_case == True).first()\n",
+    "\n",
+    "if not base_scenario:\n",
+    "    print(\"No base scenario found. Please run the data migration in Notebook 01 first.\")\n",
+    "else:\n",
+    "    # Get equipment for this scenario\n",
+    "    equipment_list = session.query(Equipment).filter(Equipment.scenario_id == base_scenario.id).all()\n",
+    "    \n",
+    "    if not equipment_list:\n",
+    "        print(\"No equipment found in base scenario. Please add equipment first.\")\n",
+    "    else:\n",
+    "        # Analyze first equipment's capacity\n",
+    "        equipment = equipment_list[0]\n",
+    "        capacity = calculate_production_capacity(equipment.id)\n",
+    "        \n",
+    "        print(f\"\\nCapacity Analysis for {capacity['equipment_name']}:\")\n",
+    "        print(f\"Max Capacity: {capacity['max_capacity']} hours/year\")\n",
+    "        print(f\"Available Capacity (adjusted for availability): {capacity['available_capacity']:.2f} hours/year\")\n",
+    "        \n",
+    "        # Calculate utilization for 2025\n",
+    "        year = 2025\n",
+    "        utilization = calculate_equipment_utilization_by_product(base_scenario.id, year)\n",
+    "        \n",
+    "        print(f\"\\nEquipment Utilization in {year}:\")\n",
+    "        for eq_id, eq_data in utilization[\"equipment\"].items():\n",
+    "            print(f\"\\n{eq_data['equipment_name']}:\")\n",
+    "            print(f\"  Utilization: {eq_data['utilization_pct']:.2f}%\")\n",
+    "            print(f\"  Used Capacity: {eq_data['used_capacity']:.2f} of {eq_data['available_capacity']:.2f} hours\")\n",
+    "            \n",
+    "            print("  Products:\")\n",
+            for prod_id, prod_data in eq_data["products"].items():
+                print(f"    {prod_data['product_name']}: {prod_data['hours_used']:.2f} hours ({prod_data['capacity_pct']:.2f}% of capacity)")
+        
+        # Check bottlenecks
+        if utilization["bottlenecks"]:
+            print("\nBottlenecks Detected:")
+            for bottleneck in utilization["bottlenecks"]:
+                print(f"  {bottleneck['equipment_name']}: {bottleneck['utilization_pct']:.2f}% utilization ({bottleneck['severity']} severity)")
+        else:
+            print("\nNo bottlenecks detected.")
+            
+        # Check unutilized capacity
+        if utilization["unutilized_capacity"]:
+            print("\nUnutilized Capacity:")
+            for unused in utilization["unutilized_capacity"]:
+                print(f"  {unused['equipment_name']}: {unused['utilization_pct']:.2f}% utilization (unused: {unused['unused_hours']:.2f} hours)")
+        return result
+\"\"\")\n",
+    "    \n",
+    "print(\"Equipment service module created.\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## Test Equipment Utilization Functions\n",
+    "\n",
+    "Let's test our equipment utilization functions with the base scenario."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "from services.equipment_service import (\n",
+    "    calculate_production_capacity,\n",
+    "    calculate_equipment_utilization_by_product,\n",
+    "    identify_capacity_constraints,\n",
+    "    model_shift_operations,\n",
+    "    optimize_equipment_purchases\n",
+    ")\n",
+    "\n",
+    "# Get the base scenario\n",
+    "base_scenario = session.query(Scenario).filter(Scenario.is_base_case == True).first()\n",
+    "\n",
+    "if not base_scenario:\n",
+    "    print(\"No base scenario found. Please run the data migration in Notebook 01 first.\")\n",
+    "else:\n",
+    "    # Get equipment for this scenario\n",
+    "    equipment_list = session.query(Equipment).filter(Equipment.scenario_id == base_scenario.id).all()\n",
+    "    \n",
+    "    if not equipment_list:\n",
+    "        print(\"No equipment found in base scenario. Please add equipment first.\")\n",
+    "    else:\n",
+    "        # Analyze first equipment's capacity\n",
+    "        equipment = equipment_list[0]\n",
+    "        capacity = calculate_production_capacity(equipment.id)\n",
+    "        \n",
+    "        print(f\"\\nCapacity Analysis for {capacity['equipment_name']}:\")\n",
+    "        print(f\"Max Capacity: {capacity['max_capacity']} hours/year\")\n",
+    "        print(f\"Available Capacity (adjusted for availability): {capacity['available_capacity']:.2f} hours/year\")\n",
+    "        \n",
+    "        # Calculate utilization for 2025\n",
+    "        year = 2025\n",
+    "        utilization = calculate_equipment_utilization_by_product(base_scenario.id, year)\n",
+    "        \n",
+    "        print(f\"\\nEquipment Utilization in {year}:\")\n",
+    "        for eq_id, eq_data in utilization[\"equipment\"].items():\n",
+    "            print(f\"\\n{eq_data['equipment_name']}:\")\n",
+    "            print(f\"  Utilization: {eq_data['utilization_pct']:.2f}%\")\n",
+    "            print(f\"  Used Capacity: {eq_data['used_capacity']:.2f} of {eq_data['available_capacity']:.2f} hours\")\n",
+    "            \n",
+    "            print(\"  Products:\")\n",
+    "            for prod_id, prod_data in eq_data[\"products\"].items():\n",
+    "                print(f\"    {prod_data['product_name']}: {prod_data['hours_used']:.2f} hours ({prod_data['capacity_pct']:.2f}% of capacity)\")\n",
+    "        \n",
+    "        # Check bottlenecks\n",
+    "        if utilization[\"bottlenecks\"]:\n",
+    "            print(\"\\nBottlenecks Detected:\")\n",
+    "            for bottleneck in utilization[\"bottlenecks\"]:\n",
+    "                print(f\"  {bottleneck['equipment_name']}: {bottleneck['utilization_pct']:.2f}% utilization ({bottleneck['severity']} severity)\")\n",
+    "        else:\n",
+    "            print(\"\\nNo bottlenecks detected.\")\n",
+    "            \n",
+    "        # Check unutilized capacity\n",
+    "        if utilization[\"unutilized_capacity\"]:\n",
+    "            print(\"\\nUnutilized Capacity:\")\n",
+    "            for unused in utilization[\"unutilized_capacity\"]:\n",
+    "                print(f\"  {unused['equipment_name']}: {unused['utilization_pct']:.2f}% utilization (unused: {unused['unused_hours']:.2f} hours)\")"
+   ]
+  },
+  
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## Multi-Year Capacity Analysis\n",
+    "\n",
+    "Let's analyze capacity constraints over multiple years."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "if base_scenario and equipment_list:
+    # Set budget constraint
+    budget_constraint = 1000000  # $1M budget
+    
+    # Run optimization from 2025 to 2030
+    start_year = 2025
+    optimization_years = 6
+    
+    optimization = optimize_equipment_purchases(
+        base_scenario.id, 
+        budget_constraint=budget_constraint,
+        start_year=start_year,
+        optimization_years=optimization_years
+    )
+    
+    if "error" in optimization:
+        print(f"Error: {optimization['error']}")
+    else:
+        print(f"\\nEquipment Purchase Optimization (Budget: ${budget_constraint:,.2f}):\\n")
+        
+        if optimization["equipment_purchase_plan"]:
+            print("Recommended Equipment Purchases:")
+            total_cost = 0
+            
+            for year, purchases in sorted(optimization["equipment_purchase_plan"].items()):
+                year_cost = sum(p["cost"] for p in purchases)
+                total_cost += year_cost
+                
+                print(f"\\n  Year {year} (Total: ${year_cost:,.2f}):")
+                for purchase in purchases:
+                    print(f"    {purchase['equipment_name']}: ${purchase['cost']:,.2f} - Adds {purchase['capacity_added']} capacity")
+            
+            print(f"\\nTotal Investment: ${total_cost:,.2f}")
+            print(f"Bottlenecks Addressed: {optimization['bottlenecks_addressed']}")
+        else:
+            print("No equipment purchases recommended.")
+            
+        if optimization["bottlenecks_remaining"]:
+            print("\\nRemaining Bottlenecks (Budget Constrained):")
+            for bottleneck in optimization["bottlenecks_remaining"]:
+                print(f"  {bottleneck['equipment_name']} in year {bottleneck['year']}: {bottleneck['utilization_pct']:.2f}% utilization")
+                
+    # Create visualization of optimization results
+    if "equipment_purchase_plan" in optimization and optimization["equipment_purchase_plan"]:
+        # Prepare data for visualization
+        years = sorted(optimization["equipment_purchase_plan"].keys())
+        costs_by_year = [sum(p["cost"] for p in optimization["equipment_purchase_plan"].get(year, [])) for year in years]
+        
+        # Plot optimization results
+        plt.figure(figsize=(12, 6))
+        
+        # Plot costs by year
+        ax1 = plt.subplot(1, 2, 1)
+        ax1.bar(years, costs_by_year, color="blue", alpha=0.7)
+        
+        # Add budget line
+        if budget_constraint:
+            ax1.axhline(y=budget_constraint, color='r', linestyle='--', alpha=0.7, label="Budget Constraint")
+        
+        ax1.set_title("Equipment Investment by Year")
+        ax1.set_xlabel("Year")
+        ax1.set_ylabel("Investment ($)")
+        ax1.set_ylim(0, max(costs_by_year) * 1.2 if costs_by_year else budget_constraint * 1.2)
+        ax1.legend()
+        
+        # Plot equipment types purchased
+        ax2 = plt.subplot(1, 2, 2)
+        
+        # Count equipment types
+        equipment_counts = {}
+        for purchases in optimization["equipment_purchase_plan"].values():
+            for purchase in purchases:
+                eq_name = purchase["equipment_name"]
+                if eq_name in equipment_counts:
+                    equipment_counts[eq_name] += 1
+                else:
+                    equipment_counts[eq_name] = 1
+        
+        # Plot equipment counts
+        if equipment_counts:
+            names = list(equipment_counts.keys())
+            counts = list(equipment_counts.values())
+            
+            ax2.bar(names, counts, color="green", alpha=0.7)
+            ax2.set_title("Equipment Types Purchased")
+            ax2.set_xlabel("Equipment Type")
+            ax2.set_ylabel("Count")
+            
+            # Rotate x-axis labels if there are many equipment types
+            if len(names) > 3:
+                plt.setp(ax2.get_xticklabels(), rotation=45, ha="right")
+        
+        plt.tight_layout()
+        plt.show()
+        
+    # Export equipment utilization visualization module
+    with open(base_dir / 'utils' / 'visualization_utils.py', 'w') as f:
+        f.write(\"\"\"# Visualization utility functions
+import matplotlib.pyplot as plt
+import seaborn as sns
+import pandas as pd
+import numpy as np
+from ..models import get_session, Scenario, Equipment
+from ..services.equipment_service import (
+    calculate_equipment_utilization_by_product,
+    identify_capacity_constraints
+)
+
+def plot_equipment_utilization(scenario_id, year):
+    \"\"\"Plot equipment utilization for a specific scenario and year\"\"\"
+    session = get_session()
+    scenario = session.query(Scenario).filter(Scenario.id == scenario_id).first()
+    
+    if not scenario:
+        return {"error": f"Scenario with ID {scenario_id} not found"}
+    
+    # Get equipment utilization data
+    utilization = calculate_equipment_utilization_by_product(scenario_id, year)
+    
+    if "error" in utilization:
+        return utilization
+    
+    # Prepare data for visualization
+    equipment_names = []
+    utilization_values = []
+    used_capacity = []
+    available_capacity = []
+    colors = []
+    
+    for eq_id, eq_data in utilization["equipment"].items():
+        equipment_names.append(eq_data["equipment_name"])
+        utilization_values.append(eq_data["utilization_pct"])
+        used_capacity.append(eq_data["used_capacity"])
+        available_capacity.append(eq_data["available_capacity"])
+        
+        # Determine color based on utilization
+        if eq_data["utilization_pct"] > 85:
+            colors.append("red")
+        elif eq_data["utilization_pct"] < 50:
+            colors.append("green")
+        else:
+            colors.append("blue")
+    
+    # Create figure with two subplots
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 8))
+    
+    # Plot utilization percentages
+    bars = ax1.bar(equipment_names, utilization_values, color=colors, alpha=0.7)
+    ax1.set_title(f"Equipment Utilization in {year} - {scenario.name}")
+    ax1.set_xlabel("Equipment")
+    ax1.set_ylabel("Utilization (%)")
+    ax1.set_ylim(0, max(100, max(utilization_values) * 1.1 if utilization_values else 100))
+    
+    # Add threshold lines
+    ax1.axhline(y=85, color='r', linestyle='--', alpha=0.5, label="Bottleneck Threshold (85%)")
+    ax1.axhline(y=50, color='g', linestyle='--', alpha=0.5, label="Underutilization Threshold (50%)")
+    ax1.legend()
+    
+    # Add value labels on bars
+    for bar in bars:
+        height = bar.get_height()
+        ax1.annotate(f'{height:.1f}%',
+                    xy=(bar.get_x() + bar.get_width() / 2, height),
+                    xytext=(0, 3),
+                    textcoords="offset points",
+                    ha='center', va='bottom')
+    
+    # Plot capacity utilization
+    x = np.arange(len(equipment_names))
+    width = 0.35
+    
+    ax2.bar(x - width/2, used_capacity, width, label='Used Capacity', color='blue', alpha=0.7)
+    ax2.bar(x + width/2, available_capacity, width, label='Available Capacity', color='lightgray', alpha=0.7)
+    
+    ax2.set_title(f"Capacity Utilization in {year} - {scenario.name}")
+    ax2.set_xlabel("Equipment")
+    ax2.set_ylabel("Capacity (hours)")
+    ax2.set_xticks(x)
+    ax2.set_xticklabels(equipment_names)
+    ax2.legend()
+    
+    # Rotate x-axis labels if there are many equipment types
+    if len(equipment_names) > 3:
+        plt.setp(ax1.get_xticklabels(), rotation=45, ha="right")
+        plt.setp(ax2.get_xticklabels(), rotation=45, ha="right")
+    
+    plt.tight_layout()
+    return fig
+
+def plot_utilization_heatmap(scenario_id, start_year, end_year):
+    \"\"\"Create a heatmap of equipment utilization over multiple years\"\"\"
+    # Get capacity constraints analysis
+    constraints = identify_capacity_constraints(scenario_id, start_year, end_year)
+    
+    if "error" in constraints:
+        return constraints
+    
+    # Prepare data for heatmap
+    utilization_trends = constraints["equipment_utilization_trend"]
+    equipment_names = []
+    years = sorted(set(year for trend in utilization_trends.values() for year in trend["years"]))
+    
+    if not years:
+        return {"error": "No utilization data available for the specified years"}
+    
+    # Prepare data for heatmap
+    heatmap_data = []
+    for eq_id, trend in utilization_trends.items():
+        equipment_names.append(trend["equipment_name"])
+        
+        # Create a row of utilization percentages for each year
+        row = []
+        for year in years:
+            if year in trend["years"]:
+                idx = trend["years"].index(year)
+                row.append(trend["utilization"][idx])
+            else:
+                row.append(0)  # No data for this year
+        
+        heatmap_data.append(row)
+    
+    # Create heatmap
+    fig = plt.figure(figsize=(12, len(equipment_names) * 0.5 + 2))
+    ax = sns.heatmap(heatmap_data, annot=True, fmt=".1f", cmap="RdYlGn_r", 
+                      vmin=0, vmax=100, cbar_kws={'label': 'Utilization %'},
+                      yticklabels=equipment_names, xticklabels=years)
+    
+    plt.title("Equipment Utilization Heatmap", fontsize=14)
+    plt.xlabel("Year", fontsize=12)
+    plt.ylabel("Equipment", fontsize=12)
+    plt.tight_layout()
+    
+    return fig
+
+def plot_shift_comparison(scenario_id, year, shift_configs=None):
+    \"\"\"Plot comparison of different shift configurations\"\"\"
+    from ..services.equipment_service import model_shift_operations
+    
+    # Define default shift configurations if not provided
+    if shift_configs is None:
+        shift_configs = {
+            "Single Shift": {
+                "shifts_per_day": 1,
+                "hours_per_shift": 8,
+                "days_per_week": 5,
+                "weeks_per_year": 50,
+                "overtime_multiplier": 1.5,
+                "max_overtime_hours_per_week": 10
+            },
+            "Double Shift": {
+                "shifts_per_day": 2,
+                "hours_per_shift": 8,
+                "days_per_week": 5,
+                "weeks_per_year": 50,
+                "overtime_multiplier": 1.5,
+                "max_overtime_hours_per_week": 5
+            },
+            "24/7 Operation": {
+                "shifts_per_day": 3,
+                "hours_per_shift": 8,
+                "days_per_week": 7,
+                "weeks_per_year": 50,
+                "overtime_multiplier": 2.0,
+                "max_overtime_hours_per_week": 0
+            }
+        }
+    
+    # Run shift analysis for each configuration
+    shift_results = {}
+    for config_name, config in shift_configs.items():
+        shift_results[config_name] = model_shift_operations(scenario_id, year, config)
+    
+    # Check for errors
+    for config_name, result in shift_results.items():
+        if "error" in result:
+            return {"error": f"{config_name}: {result['error']}"}
+    
+    # Prepare data for visualization
+    config_names = list(shift_configs.keys())
+    standard_hours = [result["standard_hours_per_year"] for result in shift_results.values()]
+    overtime_costs = [result["total_overtime_cost"] for result in shift_results.values()]
+    
+    # Create plot
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 8))
+    
+    # Plot standard hours comparison
+    ax1.bar(config_names, standard_hours, color="blue", alpha=0.7)
+    ax1.set_title("Standard Hours by Shift Configuration")
+    ax1.set_xlabel("Shift Configuration")
+    ax1.set_ylabel("Standard Hours per Year")
+    
+    # Add value labels on bars
+    for i, hours in enumerate(standard_hours):
+        ax1.annotate(f'{hours:,}',
+                   xy=(i, hours),
+                   xytext=(0, 3),
+                   textcoords="offset points",
+                   ha='center', va='bottom')
+    
+    # Plot overtime cost comparison
+    ax2.bar(config_names, overtime_costs, color="red", alpha=0.7)
+    ax2.set_title("Overtime Costs by Shift Configuration")
+    ax2.set_xlabel("Shift Configuration")
+    ax2.set_ylabel("Overtime Cost ($)")
+    
+    # Add value labels on bars
+    for i, cost in enumerate(overtime_costs):
+        ax2.annotate(f'${cost:,.2f}',
+                   xy=(i, cost),
+                   xytext=(0, 3),
+                   textcoords="offset points",
+                   ha='center', va='bottom')
+    
+    plt.tight_layout()
+    return fig
+
+def export_equipment_analysis_report(scenario_id, start_year, end_year, output_file=None):
+    \"\"\"Generate a comprehensive equipment analysis report as PDF\"\"\"
+    import matplotlib.backends.backend_pdf as pdf
+    from ..services.equipment_service import identify_capacity_constraints, optimize_equipment_purchases
+    
+    session = get_session()
+    scenario = session.query(Scenario).filter(Scenario.id == scenario_id).first()
+    
+    if not scenario:
+        return {"error": f"Scenario with ID {scenario_id} not found"}
+    
+    scenario_name = scenario.name
+    
+    # Create PDF
+    if output_file is None:
+        output_file = f"{scenario_name}_equipment_analysis.pdf"
+    
+    pdf_pages = pdf.PdfPages(output_file)
+    
+    # Generate equipment utilization heatmap
+    fig1 = plot_utilization_heatmap(scenario_id, start_year, end_year)
+    pdf_pages.savefig(fig1)
+    plt.close(fig1)
+    
+    # Generate equipment utilization for each year
+    for year in range(start_year, end_year + 1):
+        fig2 = plot_equipment_utilization(scenario_id, year)
+        pdf_pages.savefig(fig2)
+        plt.close(fig2)
+    
+    # Generate shift comparison
+    fig3 = plot_shift_comparison(scenario_id, end_year)
+    pdf_pages.savefig(fig3)
+    plt.close(fig3)
+    
+    # Generate optimization analysis
+    constraints = identify_capacity_constraints(scenario_id, start_year, end_year)
+    
+    if "error" not in constraints and constraints["capacity_expansion_recommendations"]:
+        # Set budget constraint at 3x the cost of the most expensive recommendation
+        max_rec_cost = max(rec["estimated_cost"] for rec in constraints["capacity_expansion_recommendations"] 
+                           if isinstance(rec["estimated_cost"], (int, float)))
+        budget_constraint = max_rec_cost * 3
+        
+        # Run optimization
+        optimization = optimize_equipment_purchases(
+            scenario_id,
+            budget_constraint=budget_constraint,
+            start_year=start_year,
+            optimization_years=end_year - start_year + 1
+        )
+        
+        if "error" not in optimization and optimization["equipment_purchase_plan"]:
+            # Prepare data for visualization
+            years = sorted(optimization["equipment_purchase_plan"].keys())
+            costs_by_year = [sum(p["cost"] for p in optimization["equipment_purchase_plan"].get(year, [])) for year in years]
+            
+            # Plot optimization results
+            fig4 = plt.figure(figsize=(12, 6))
+            
+            # Plot costs by year
+            ax1 = plt.subplot(1, 2, 1)
+            ax1.bar(years, costs_by_year, color="blue", alpha=0.7)
+            
+            # Add budget line
+            ax1.axhline(y=budget_constraint, color='r', linestyle='--', alpha=0.7, label="Budget Constraint")
+            
+            ax1.set_title("Equipment Investment by Year")
+            ax1.set_xlabel("Year")
+            ax1.set_ylabel("Investment ($)")
+            ax1.set_ylim(0, max(costs_by_year) * 1.2 if costs_by_year else budget_constraint * 1.2)
+            ax1.legend()
+            
+            # Plot equipment types purchased
+            ax2 = plt.subplot(1, 2, 2)
+            
+            # Count equipment types
+            equipment_counts = {}
+            for purchases in optimization["equipment_purchase_plan"].values():
+                for purchase in purchases:
+                    eq_name = purchase["equipment_name"]
+                    if eq_name in equipment_counts:
+                        equipment_counts[eq_name] += 1
+                    else:
+                        equipment_counts[eq_name] = 1
+            
+            # Plot equipment counts
+            if equipment_counts:
+                names = list(equipment_counts.keys())
+                counts = list(equipment_counts.values())
+                
+                ax2.bar(names, counts, color="green", alpha=0.7)
+                ax2.set_title("Equipment Types Purchased")
+                ax2.set_xlabel("Equipment Type")
+                ax2.set_ylabel("Count")
+                
+                # Rotate x-axis labels if there are many equipment types
+                if len(names) > 3:
+                    plt.setp(ax2.get_xticklabels(), rotation=45, ha="right")
+            
+            plt.tight_layout()
+            pdf_pages.savefig(fig4)
+            plt.close(fig4)
+    
+    pdf_pages.close()
+    
+    return {"status": "success", "file_path": output_file}
+\"\"\")\n",
+    "    \n",
+    "print(\"Visualization utility functions exported.\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## Create Optimization Service Module\n",
+    "\n",
+    "Let's create a module for optimization services to lay the groundwork for future advanced optimization capabilities."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Create the optimization_service.py module\n",
+    "with open(base_dir / 'services' / 'optimization_service.py', 'w') as f:\n",
+    "    f.write(\"\"\"\n",
+    "# Optimization service for manufacturing model\n",
+    "import numpy as np\n",
+    "import pandas as pd\n",
+    "from ..models import (\n",
+    "    Scenario, Equipment, Product, CostDriver, FinancialProjection,\n",
+    "    get_session\n",
+    ")\n",
+    "\n",
+    "def optimize_production_mix(scenario_id, year, constraints=None):\n",
+    "    \"\"\"Optimize production mix for maximum profit\"\"\"\n",
+    "    # This function is a placeholder for future implementation\n",
+    "    # It will use linear programming to optimize the production mix\n",
+    "    # based on equipment constraints and product profitability\n",
+    "    return {\"status\": \"not_implemented\", \"message\": \"Production mix optimization will be implemented in Phase 2\"}\n",
+    "\n",
+    "def optimize_equipment_leasing(scenario_id, available_equipment, budget_constraint=None):\n",
+    "    \"\"\"Optimize equipment leasing vs. purchasing decisions\"\"\"\n",
+    "    # This function is a placeholder for future implementation\n",
+    "    # It will compare leasing vs. purchasing options for equipment\n",
+    "    # based on financial constraints and projected utilization\n",
+    "    return {\"status\": \"not_implemented\", \"message\": \"Equipment leasing optimization will be implemented in Phase 2\"}\n",
+    "\n",
+    "def optimize_staffing(scenario_id, year, labor_categories=None):\n",
+    "    \"\"\"Optimize staffing levels based on production requirements\"\"\"\n",
+    "    # This function is a placeholder for future implementation\n",
+    "    # It will calculate optimal staffing levels based on production volumes\n",
+    "    # and labor requirements for each product\n",
+    "    return {\"status\": \"not_implemented\", \"message\": \"Staffing optimization will be implemented in Phase 2\"}\n",
+    "\n",
+    "def run_monte_carlo_simulation(scenario_id, iterations=1000, variables=None):\n",
+    "    \"\"\"Run Monte Carlo simulation for scenario analysis\"\"\"\n",
+    "    # This function is a placeholder for future implementation\n",
+    "    # It will run Monte Carlo simulation to analyze risk and uncertainty\n",
+    "    # in financial projections\n",
+    "    return {\"status\": \"not_implemented\", \"message\": \"Monte Carlo simulation will be implemented in Phase 2\"}\n",
+    "\"\"\")\n",
+    "    \n",
+    "print(\"Optimization service module created.\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## Integration with Financial Projections\n",
+    "\n",
+    "Let's connect our equipment utilization analysis with the financial projections to ensure they are properly integrated."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "if base_scenario and equipment_list:\n",
+    "    # Recalculate financial projections with utilization data\n",
+    "    from services.financial_service import calculate_financial_projections\n",
+    "    \n",
+    "    result = calculate_financial_projections(base_scenario.id)\n",
+    "    print(result)\n",
+    "    \n",
+    "    # Get updated projections\n",
+    "    projections = session.query(FinancialProjection).filter(\n",
+    "        FinancialProjection.scenario_id == base_scenario.id\n",
+    "    ).order_by(FinancialProjection.year).all()\n",
+    "    \n",
+    "    # Create a plot that shows revenue vs. capacity utilization\n",
+    "    if projections:\n",
+    "        years = [p.year for p in projections]\n",
+    "        revenues = [p.revenue for p in projections]\n",
+    "        utilizations = [p.capacity_utilization for p in projections]\n",
+    "        \n",
+    "        fig, ax1 = plt.subplots(figsize=(12, 6))\n",
+    "        \n",
+    "        # Plot revenue\n",
+    "        color = 'tab:blue'\n",
+    "        ax1.set_xlabel('Year')\n",
+    "        ax1.set_ylabel('Revenue ($)', color=color)\n",
+    "        ax1.plot(years, revenues, color=color, marker='o', linewidth=2)\n",
+    "        ax1.tick_params(axis='y', labelcolor=color)\n",
+    "        \n",
+    "        # Create second y-axis for utilization\n",
+    "        ax2 = ax1.twinx()\n",
+    "        color = 'tab:red'\n",
+    "        ax2.set_ylabel('Capacity Utilization (%)', color=color)\n",
+    "        ax2.plot(years, utilizations, color=color, marker='s', linewidth=2)\n",
+    "        ax2.tick_params(axis='y', labelcolor=color)\n",
+    "        ax2.axhline(y=85, color='r', linestyle='--', alpha=0.3, label=\"Bottleneck Threshold\")\n",
+    "        ax2.set_ylim(0, 110)\n",
+    "        \n",
+    "        plt.title('Revenue vs. Capacity Utilization')\n",
+    "        fig.tight_layout()\n",
+    "        plt.show()"
+   ]
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python 3",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.8.5"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 4
+}
+
+{
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## Multi-Year Capacity Analysis\n",
+    "\n",
+    "Let's analyze capacity constraints over multiple years."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "if base_scenario and equipment_list:\n",
+    "    # Analyze capacity constraints from 2025 to 2030\n",
+    "    start_year = 2025\n",
+    "    end_year = 2030\n",
+    "    \n",
+    "    constraints = identify_capacity_constraints(base_scenario.id, start_year, end_year)\n",
+    "    \n",
+    "    print(f\"\\nCapacity Constraints Analysis ({start_year}-{end_year}):\")\n",
+    "    \n",
+    "    # Show bottlenecks by year\n",
+    "    if constraints[\"bottlenecks_by_year\"]:\n",
+    "        print(\"\\nBottlenecks by Year:\")\n",
+    "        for year, bottlenecks in sorted(constraints[\"bottlenecks_by_year\"].items()):\n",
+    "            print(f\"\\n  Year {year}:\")\n",
+    "            for bottleneck in bottlenecks:\n",
+    "                print(f\"    {bottleneck['equipment_name']}: {bottleneck['utilization_pct']:.2f}% utilization ({bottleneck['severity']} severity)\")\n",
+    "    else:\n",
+    "        print(\"\\nNo bottlenecks detected across the analysis period.\")\n",
+    "    \n",
+    "    # Show capacity expansion recommendations\n",
+    "    if constraints[\"capacity_expansion_recommendations\"]:\n",
+    "        print(\"\\nCapacity Expansion Recommendations:\")\n",
+    "        for rec in constraints[\"capacity_expansion_recommendations\"]:\n",
+    "            print(f\"\\n  {rec['equipment_name']} (Year {rec['constraint_year']}):\")\n",
+    "            print(f\"    {rec['recommendation']}\")\n",
+    "            print(f\"    Details: {rec['details']}\")\n",
+    "            print(f\"    Estimated Cost: ${rec['estimated_cost']:,.2f}\")\n",
+    "    else:\n",
+    "        print(\"\\nNo capacity expansion recommendations.\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## Visualize Equipment Utilization\n",
+    "\n",
+    "Let's create visualizations for equipment utilization."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "if base_scenario and equipment_list and 'constraints' in locals():\n",
+    "    # Prepare data for visualization\n",
+    "    utilization_trends = constraints[\"equipment_utilization_trend\"]\n",
+    "    \n",
+    "    # Create a multi-line chart of equipment utilization over time\n",
+    "    plt.figure(figsize=(12, 8))\n",
+    "    \n",
+    "    for eq_id, trend in utilization_trends.items():\n",
+    "        if trend[\"years\"] and trend[\"utilization\"]:\n",
+    "            plt.plot(trend[\"years\"], trend[\"utilization\"], marker=\"o\", linewidth=2, label=trend[\"equipment_name\"])\n",
+    "    \n",
+    "    plt.axhline(y=85, color='r', linestyle='--', alpha=0.5, label=\"Bottleneck Threshold (85%)\")\n",
+    "    plt.axhline(y=50, color='g', linestyle='--', alpha=0.5, label=\"Underutilization Threshold (50%)\")\n",
+    "    \n",
+    "    plt.title(\"Equipment Utilization Trends\", fontsize=14)\n",
+    "    plt.xlabel(\"Year\", fontsize=12)\n",
+    "    plt.ylabel(\"Utilization (%)\", fontsize=12)\n",
+    "    plt.grid(True, alpha=0.3)\n",
+    "    plt.legend()\n",
+    "    plt.tight_layout()\n",
+    "    plt.show()\n",
+    "    \n",
+    "    # Create a heat map of equipment utilization by year\n",
+    "    equipment_names = []\n",
+    "    years = sorted(set(year for trend in utilization_trends.values() for year in trend[\"years\"]))\n",
+    "    \n",
+    "    if years:\n",
+    "        # Prepare data for heatmap\n",
+    "        heatmap_data = []\n",
+    "        for eq_id, trend in utilization_trends.items():\n",
+    "            equipment_names.append(trend[\"equipment_name\"])\n",
+    "            \n",
+    "            # Create a row of utilization percentages for each year\n",
+    "            row = []\n",
+    "            for year in years:\n",
+    "                if year in trend[\"years\"]:\n",
+    "                    idx = trend[\"years\"].index(year)\n",
+    "                    row.append(trend[\"utilization\"][idx])\n",
+    "                else:\n",
+    "                    row.append(0)  # No data for this year\n",
+    "            \n",
+    "            heatmap_data.append(row)\n",
+    "        \n",
+    "        # Create heatmap\n",
+    "        plt.figure(figsize=(12, len(equipment_names) * 0.5 + 2))\n",
+    "        ax = sns.heatmap(heatmap_data, annot=True, fmt=\".1f\", cmap=\"RdYlGn_r\", \n",
+    "                          vmin=0, vmax=100, cbar_kws={'label': 'Utilization %'},\n",
+    "                          yticklabels=equipment_names, xticklabels=years)\n",
+    "        \n",
+    "        plt.title(\"Equipment Utilization Heatmap\", fontsize=14)\n",
+    "        plt.xlabel(\"Year\", fontsize=12)\n",
+    "        plt.ylabel(\"Equipment\", fontsize=12)\n",
+    "        plt.tight_layout()\n",
+    "        plt.show()"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## Shift Operation Modeling\n",
+    "\n",
+    "Let's model shift operations including overtime costs."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "if base_scenario and equipment_list:\n",
+    "    # Model shift operations for 2025\n",
+    "    year = 2025\n",
+    "    \n",
+    "    # Define different shift configurations to compare\n",
+    "    shift_configs = {\n",
+    "        \"Single Shift\": {\n",
+    "            \"shifts_per_day\": 1,\n",
+    "            \"hours_per_shift\": 8,\n",
+    "            \"days_per_week\": 5,\n",
+    "            \"weeks_per_year\": 50,\n",
+    "            \"overtime_multiplier\": 1.5,\n",
+    "            \"max_overtime_hours_per_week\": 10\n",
+    "        },\n",
+    "        \"Double Shift\": {\n",
+    "            \"shifts_per_day\": 2,\n",
+    "            \"hours_per_shift\": 8,\n",
+    "            \"days_per_week\": 5,\n",
+    "            \"weeks_per_year\": 50,\n",
+    "            \"overtime_multiplier\": 1.5,\n",
+    "            \"max_overtime_hours_per_week\": 5\n",
+    "        },\n",
+    "        \"24/7 Operation\": {\n",
+    "            \"shifts_per_day\": 3,\n",
+    "            \"hours_per_shift\": 8,\n",
+    "            \"days_per_week\": 7,\n",
+    "            \"weeks_per_year\": 50,\n",
+    "            \"overtime_multiplier\": 2.0,\n",
+    "            \"max_overtime_hours_per_week\": 0\n",
+    "        }\n",
+    "    }\n",
+    "    \n",
+    "    # Compare shift operations\n",
+    "    shift_results = {}\n",
+    "    for config_name, config in shift_configs.items():\n",
+    "        shift_results[config_name] = model_shift_operations(base_scenario.id, year, config)\n",
+    "    \n",
+    "    # Display results\n",
+    "    print(f\"\\nShift Operation Analysis for Year {year}:\\n\")\n",
+    "    \n",
+    "    for config_name, result in shift_results.items():\n",
+    "        if \"error\" in result:\n",
+    "            print(f\"{config_name}: {result['error']}\")\n",
+    "            continue\n",
+    "            \n",
+    "        print(f\"{config_name}:\")\n",
+    "        print(f\"  Standard Hours per Year: {result['standard_hours_per_year']}\")\n",
+    "        print(f\"  Max Overtime Hours per Year: {result['max_overtime_hours_per_year']}\")\n",
+    "        print(f\"  Total Overtime Cost: ${result['total_overtime_cost']:,.2f}\")\n",
+    "        \n",
+    "        if result[\"shift_recommendations\"]:\n",
+    "            print(\"  Shift Recommendations:\")\n",
+    "            for rec in result[\"shift_recommendations\"]:\n",
+    "                print(f\"    {rec['equipment_name']}: Increase from {rec['current_shifts']} to {rec['recommended_shifts']} shifts\")\n",
+    "        \n",
+    "        print(\"  Equipment Status:\")\n",
+    "        for eq_id, eq_data in result[\"equipment_shift_analysis\"].items():\n",
+    "            status = eq_data[\"status\"]\n",
+    "            status_color = \"green\" if status == \"normal\" else \"orange\" if status == \"overtime\" else \"red\"\n",
+    "            print(f\"    {eq_data['equipment_name']}: {status.upper()} - {eq_data['required_hours']:.2f}/{eq_data['standard_hours']} hours ({eq_data['required_shifts']:.2f} shifts)\")\n",
+    "            \n",
+    "            if eq_data[\"overtime_hours\"] > 0:\n",
+    "                print(f\"      Overtime: {eq_data['overtime_hours']:.2f} hours, Cost: ${eq_data['overtime_cost']:,.2f}\")\n",
+    "        \n",
+    "        print(\"\\n\" + \"-\"*50 + \"\\n\")"
+   ]
+  },
+  
+   
