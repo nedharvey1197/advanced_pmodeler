@@ -1,0 +1,28 @@
+# Web Framework
+streamlit>=1.31.0
+streamlit-extras>=0.3.0
+st-pages>=0.4.0
+
+# Data Visualization
+plotly>=5.18.0
+altair>=5.2.0
+bokeh>=3.3.0
+
+# Interactive Components
+streamlit-option-menu>=0.3.0
+streamlit-aggrid>=0.3.0
+streamlit-elements>=0.1.0
+
+# File Handling
+streamlit-uploader>=0.2.0
+streamlit-download-button>=0.1.0
+
+# Authentication
+streamlit-authenticator>=0.2.0
+
+# Styling
+streamlit-custom-notification>=0.1.0
+streamlit-toggle-switch>=0.1.0
+
+# Dependencies
+-r base.txt 
