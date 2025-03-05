@@ -10,4 +10,5 @@ google-api-python-client>=2.95.0
 
 # Data manipulation
 pandas>=2.0.0
-numpy>=1.24.0 
+numpy>=1.24.0
+et-xmlfile>=1.1.0  # Required for openpyxl 
