@@ -14,19 +14,18 @@ For detailed information about the integration between basic and advanced financ
 see financial_modeling_README.md
 """
 
-import numpy as np
-import pandas as pd
-from datetime import datetime
 from typing import Dict, List, Any, Optional
+from datetime import datetime
 from sqlalchemy import and_
 
-from ..models import (
+from advanced_pmodeler.models import (
     Scenario, Equipment, Product, CostDriver, FinancialProjection,
-    get_session
+    get_session, ServiceMixin
 )
-from .advanced_fin_Services import AdvancedFinancialModeling
+# Advanced financial modeling service - will be used for future features
+# from .advanced_fin_Services import AdvancedFinancialModeling
 
-class FinancialService:
+class FinancialService(ServiceMixin):
     """
     Service class for financial modeling and analysis.
     
@@ -505,6 +504,25 @@ class FinancialService:
         return {
             "capacity_utilization": utilization.get("overall_utilization_pct", 0)
         }
+
+    def calculate_financial_projection(self, scenario_id: int, year: int) -> Dict[str, Any]:
+        """Calculate financial projection for a specific year."""
+        from .equipment_service import EquipmentService
+        from .sales_service import SalesService
+        
+        scenario = self.session.query(Scenario).filter(Scenario.id == scenario_id).first()
+        if not scenario:
+            return {"error": f"Scenario with ID {scenario_id} not found"}
+            
+        # Get services through session
+        equipment_service = self._get_service(EquipmentService)
+        sales_service = self._get_service(SalesService)
+        
+        # Calculate projections
+        utilization = equipment_service.calculate_equipment_utilization(scenario_id, year)
+        sales_forecast = sales_service.calculate_sales_forecast(scenario_id, year, year)
+        
+        return self._calculate_projection(scenario, year, utilization, sales_forecast)
 
 # Wrapper functions for easy access
 def calculate_unit_economics(product_id: int) -> Dict[str, Any]:

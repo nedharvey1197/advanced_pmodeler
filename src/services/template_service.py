@@ -8,9 +8,16 @@ from typing import Dict, Any, Optional
 from datetime import datetime
 import os
 from pathlib import Path
+from sqlalchemy.exc import SQLAlchemyError
+from openpyxl.exceptions import InvalidFileException
+from openpyxl.utils.exceptions import SheetTitleException
+from openpyxl.styles import (
+    Font, Alignment, Border, Side, PatternFill,
+    NamedStyle
+)
 
 from .spreadsheet_services import SpreadsheetService
-from ..models import (
+from advanced_pmodeler.models import (
     Scenario, Equipment, Product, CostDriver, FinancialProjection,
     get_session
 )
@@ -45,9 +52,19 @@ class TemplateService:
             
         Returns:
             Dictionary containing scenario data
+            
+        Raises:
+            ValueError: If template file is invalid or missing required sheets
+            InvalidFileException: If Excel file is corrupted or invalid
         """
         try:
             wb = openpyxl.load_workbook(template_file, data_only=True)
+            
+            # Verify required sheets exist
+            required_sheets = ["Scenario Inputs", "Equipment Inputs", "Product Inputs"]
+            missing_sheets = [sheet for sheet in required_sheets if sheet not in wb.sheetnames]
+            if missing_sheets:
+                raise ValueError(f"Template missing required sheets: {', '.join(missing_sheets)}")
             
             # Read scenario inputs
             ws_scenario = wb["Scenario Inputs"]
@@ -103,6 +120,12 @@ class TemplateService:
                 "products": product_data
             }
             
+        except InvalidFileException as e:
+            raise ValueError(f"Invalid Excel file: {str(e)}")
+        except SheetTitleException as e:
+            raise ValueError(f"Invalid sheet name in template: {str(e)}")
+        except ValueError as e:
+            raise ValueError(f"Invalid data in template: {str(e)}")
         except Exception as e:
             raise ValueError(f"Failed to read template: {str(e)}")
     
@@ -152,6 +175,12 @@ class TemplateService:
                 "status": "success"
             }
             
+        except SQLAlchemyError as e:
+            self.session.rollback()
+            return {"error": f"Database error while creating scenario: {str(e)}"}
+        except ValueError as e:
+            self.session.rollback()
+            return {"error": f"Invalid template data: {str(e)}"}
         except Exception as e:
             self.session.rollback()
             return {"error": f"Failed to create scenario: {str(e)}"}
@@ -199,6 +228,12 @@ class TemplateService:
             
             return {"status": "success"}
             
+        except SQLAlchemyError as e:
+            self.session.rollback()
+            return {"error": f"Database error while updating scenario: {str(e)}"}
+        except ValueError as e:
+            self.session.rollback()
+            return {"error": f"Invalid template data: {str(e)}"}
         except Exception as e:
             self.session.rollback()
             return {"error": f"Failed to update scenario: {str(e)}"}
@@ -222,6 +257,28 @@ class TemplateService:
             
             # Create template
             wb = openpyxl.Workbook()
+            
+            # Create styles
+            header_style = NamedStyle(name='header_style')
+            header_style.font = Font(name='Calibri', bold=True)
+            header_style.fill = PatternFill(start_color="CCCCCC", end_color="CCCCCC", fill_type="solid")
+            header_style.alignment = Alignment(horizontal="left", vertical="center")
+            header_style.border = Border(
+                left=Side(style='thin'),
+                right=Side(style='thin'),
+                top=Side(style='thin'),
+                bottom=Side(style='thin')
+            )
+            
+            data_style = NamedStyle(name='data_style')
+            data_style.font = Font(name='Calibri')
+            data_style.alignment = Alignment(horizontal="left", vertical="center")
+            data_style.border = Border(
+                left=Side(style='thin'),
+                right=Side(style='thin'),
+                top=Side(style='thin'),
+                bottom=Side(style='thin')
+            )
             
             # Create Scenario Inputs sheet
             ws_scenario = wb.active
@@ -251,14 +308,17 @@ class TemplateService:
             ws_equipment.append(headers)
             
             # Add equipment data
-            equipment = self.session.query(Equipment).filter(Equipment.scenario_id == scenario_id).all()
+            equipment = self.session.query(Equipment).filter(
+                Equipment.scenario_id == scenario_id
+            ).all()
+            
             for eq in equipment:
                 ws_equipment.append([
                     eq.name, eq.cost, eq.useful_life, eq.max_capacity,
                     eq.maintenance_cost_pct * 100, eq.availability_pct * 100,
                     eq.purchase_year, "Yes" if eq.is_leased else "No",
                     eq.lease_rate * 100 if eq.lease_rate else "",
-                    eq.lease_type
+                    eq.lease_type if eq.lease_type else ""
                 ])
             
             # Create Product Inputs sheet
@@ -268,7 +328,10 @@ class TemplateService:
             ws_product.append(headers)
             
             # Add product data
-            products = self.session.query(Product).filter(Product.scenario_id == scenario_id).all()
+            products = self.session.query(Product).filter(
+                Product.scenario_id == scenario_id
+            ).all()
+            
             for prod in products:
                 ws_product.append([
                     prod.name, prod.initial_units, prod.unit_price,
@@ -278,27 +341,23 @@ class TemplateService:
             
             # Apply formatting
             for ws in [ws_scenario, ws_equipment, ws_product]:
-                for row in ws.iter_rows():
-                    for cell in row:
-                        cell.font = Font(name="Calibri")
-                        cell.alignment = Alignment(horizontal="left", vertical="center")
-                        cell.border = Border(
-                            left=Side(style='thin'),
-                            right=Side(style='thin'),
-                            top=Side(style='thin'),
-                            bottom=Side(style='thin')
-                        )
-            
-            # Format headers
-            for ws in [ws_scenario, ws_equipment, ws_product]:
+                # Format headers
                 for cell in ws[1]:
-                    cell.font = Font(bold=True)
-                    cell.fill = PatternFill(start_color="CCCCCC", end_color="CCCCCC", fill_type="solid")
+                    cell.style = header_style
+                
+                # Format data cells
+                for row in ws.iter_rows(min_row=2):
+                    for cell in row:
+                        cell.style = data_style
             
             # Save template
             wb.save(output_file)
             
             return {"status": "success", "file_path": output_file}
             
+        except SQLAlchemyError as e:
+            return {"error": f"Database error while creating template: {str(e)}"}
+        except InvalidFileException as e:
+            return {"error": f"Failed to save Excel file: {str(e)}"}
         except Exception as e:
             return {"error": f"Failed to create template: {str(e)}"} 

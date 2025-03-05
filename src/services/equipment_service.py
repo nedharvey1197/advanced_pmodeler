@@ -16,12 +16,12 @@ from typing import Dict, List, Any, Optional, Tuple
 from sqlalchemy import and_
 from datetime import datetime
 
-from ..models import (
+from advanced_pmodeler.models import (
     Scenario, Equipment, Product, CostDriver, FinancialProjection,
-    get_session
+    get_session, ServiceMixin
 )
 
-class EquipmentService:
+class EquipmentService(ServiceMixin):
     """
     Service class for equipment management and analysis.
     
@@ -537,6 +537,15 @@ class EquipmentService:
                 result["bottlenecks_remaining"].append(bottleneck)
         
         return result
+
+    def calculate_equipment_utilization(self, scenario_id: int, year: int) -> Dict[str, Any]:
+        """Calculate equipment utilization metrics."""
+        # Get financial service through session when needed
+        from .financial_service import FinancialService
+        financial_service = self._get_service(FinancialService)
+        
+        # Rest of the implementation...
+        pass
 
 # Wrapper functions for easy access
 def calculate_production_capacity(equipment_id: int, year: int = None) -> Dict[str, Any]:

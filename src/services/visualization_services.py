@@ -1,14 +1,15 @@
 # Visualization utility functions
-import matplotlib.pyplot as plt
-import seaborn as sns
+# Advanced visualization imports - will be used for future features
+# import matplotlib.pyplot as plt
+# import seaborn as sns
 import pandas as pd
 import numpy as np
-import matplotlib.backends.backend_pdf as pdf
+# import matplotlib.backends.backend_pdf as pdf
 import os
 from typing import Dict, List, Any, Optional, Union, Tuple
 from datetime import datetime
 
-from ..models import (
+from advanced_pmodeler.models import (
     Scenario, Equipment, Product, CostDriver, FinancialProjection,
     get_session
 )

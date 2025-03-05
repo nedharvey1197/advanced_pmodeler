@@ -1,32 +1,32 @@
-# models/__init__.py
-# Import all models for easy access
-from .base import Base, engine, get_session
-from .scenario import Scenario
-from .equipment import Equipment
-from .product import Product
-from .cost_driver import CostDriver
-from .financial_projection import FinancialProjection
-from .scenario_models import Scenario
+"""
+Initialize models package and ensure all models are imported.
+"""
+
+from .base_models import Base, engine, Session, get_session
+from .product_models import Product, CostDriver
 from .equipment_models import Equipment
-from .product_models import Product
 from .financial_projections_model import FinancialProjection
 from .sales_models import SalesParameter, SalesForecast, ProductForecast
 from .ga_models import GAExpense
+from .scenario_models import Scenario
 from .industry_models import IndustryStandard, ScenarioAssumption
 
-# Create all tables
 def create_tables():
+    """Create all database tables."""
     Base.metadata.create_all(engine)
 
 __all__ = [
     'Scenario',
     'Equipment',
     'Product',
+    'CostDriver',
     'FinancialProjection',
     'SalesParameter',
     'SalesForecast',
     'ProductForecast',
     'GAExpense',
     'IndustryStandard',
-    'ScenarioAssumption'
+    'ScenarioAssumption',
+    'create_tables',
+    'get_session'
 ]

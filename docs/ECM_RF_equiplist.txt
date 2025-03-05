@@ -1,0 +1,34 @@
+# Capital Equipment for High Power RF and ECM Component Manufacturing
+
+| Equipment | Unit Price (USD) | Market Size (USD) | Annual Growth Rate | Price Elasticity |
+|-----------|------------------|-------------------|---------------------|-----------------|
+| RF Network Analyzer | 350000 | 1200000000 | 6.8 | 0.3 |
+| Superconducting Magnet Winder | 10000000 | 500000000 | 5.0 | 0.1 |
+| RF Transmission Line Extruder | 1000000 | 2500000000 | 6.8 | 0.4 |
+| Directed Energy Battery Tester | 3000000 | 800000000 | 6.0 | 0.3 |
+| High Temperature Heat Flux Chamber | 10000000 | 400000000 | 4.5 | 0.2 |
+| Electron Beam Welder | 2000000 | 1500000000 | 5.0 | 0.4 |
+| X-Ray Inspection System | 750000 | 3000000000 | 5.0 | 0.6 |
+| Metal 3D Printer | 1500000 | 5000000000 | 8.0 | 0.6 |
+| Industrial Fiber Laser | 5000000 | 4000000000 | 6.0 | 0.3 |
+| Vector Network Analyzer | 650000 | 2000000000 | 5.0 | 0.6 |
+| Tokamak Component Mill | 15000000 | 300000000 | 4.5 | 0.1 |
+| Vacuum Chamber Welder | 2250000 | 1000000000 | 5.0 | 0.3 |
+| Automated Cell Tester | 6500000 | 10330000000 | 14.3 | 0.4 |
+| ECM Circuit Assembler | 1500000 | 10330000000 | 14.3 | 0.4 |
+| 5-Axis CNC Machine | 1000000 | 8000000000 | 6.0 | 0.7 |
+| 3-Axis CNC Machine | 375000 | 12000000000 | 6.0 | 0.8 |
+| CO2 Laser Cutter | 1000000 | 5000000000 | 6.0 | 0.6 |
+| Abrasive Water Jet Cutter | 225000 | 3000000000 | 5.0 | 0.7 |
+| Wire EDM Machine | 175000 | 4200000000 | 6.2 | 0.7 |
+| Industrial Tempering Oven | 125000 | 2500000000 | 4.0 | 0.6 |
+| ISO Class 6 Cleanroom | 1250000 | 5000000000 | 5.0 | 0.3 |
+| Vacuum Test Chamber | 350000 | 2000000000 | 5.0 | 0.4 |
+| Induction Furnace | 100000 | 3000000000 | 4.0 | 0.7 |
+| Metal Sintering Furnace | 550000 | 2000000000 | 5.0 | 0.4 |
+| PCB Etching Machine | 300000 | 4200000000 | 6.2 | 0.6 |
+| Gyrotron Tester | 2500000 | 800000000 | 5.5 | 0.2 |
+| RF Waveguide Analyzer | 450000 | 1500000000 | 6.8 | 0.3 |
+| Klystron Test Bench | 1750000 | 900000000 | 5.0 | 0.2 |
+| Traveling Wave Tube Tester | 800000 | 700000000 | 4.5 | 0.3 |
+| Microwave Anechoic Chamber | 1200000 | 1800000000 | 5.5 | 0.3 |

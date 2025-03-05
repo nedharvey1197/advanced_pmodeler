@@ -11,6 +11,10 @@ from typing import Dict, List, Any, Optional, Union
 from datetime import datetime
 import os
 from pathlib import Path
+from sqlalchemy.exc import SQLAlchemyError
+from openpyxl.exceptions import InvalidFileException
+from google.auth.exceptions import GoogleAuthError
+from googleapiclient.errors import HttpError as GoogleAPIError
 
 # Excel dependencies
 try:
@@ -30,7 +34,7 @@ try:
 except ImportError:
     GOOGLE_SHEETS_AVAILABLE = False
 
-from ..models import (
+from advanced_pmodeler.models import (
     Scenario, Equipment, Product, CostDriver, FinancialProjection,
     get_session
 )
@@ -104,6 +108,12 @@ class SpreadsheetService:
             
             return {"status": "success", "file_path": output_file}
             
+        except InvalidFileException as e:
+            return {"error": f"Invalid Excel file: {str(e)}"}
+        except PermissionError as e:
+            return {"error": f"Permission denied when saving Excel file: {str(e)}"}
+        except ValueError as e:
+            return {"error": f"Invalid data format: {str(e)}"}
         except Exception as e:
             return {"error": f"Failed to export to Excel: {str(e)}"}
     
@@ -151,6 +161,12 @@ class SpreadsheetService:
             
             return {"status": "success"}
             
+        except GoogleAuthError as e:
+            return {"error": f"Google authentication error: {str(e)}"}
+        except GoogleAPIError as e:
+            return {"error": f"Google Sheets API error: {str(e)}"}
+        except ValueError as e:
+            return {"error": f"Invalid data format: {str(e)}"}
         except Exception as e:
             return {"error": f"Failed to export to Google Sheets: {str(e)}"}
     
@@ -196,6 +212,12 @@ class SpreadsheetService:
             
             return {"status": "success", "file_path": output_file}
             
+        except SQLAlchemyError as e:
+            return {"error": f"Database error while creating dashboard: {str(e)}"}
+        except InvalidFileException as e:
+            return {"error": f"Invalid Excel file: {str(e)}"}
+        except PermissionError as e:
+            return {"error": f"Permission denied when saving Excel file: {str(e)}"}
         except Exception as e:
             return {"error": f"Failed to create dashboard: {str(e)}"}
     
@@ -223,7 +245,10 @@ class SpreadsheetService:
                 if creds and creds.expired and creds.refresh_token:
                     creds.refresh(Request())
                 else:
-                    flow = InstalledAppFlow.from_client_secrets_file(credentials_path, ['https://www.googleapis.com/auth/spreadsheets'])
+                    flow = InstalledAppFlow.from_client_secrets_file(
+                        credentials_path, 
+                        ['https://www.googleapis.com/auth/spreadsheets']
+                    )
                     creds = flow.run_local_server(port=0)
                 
                 with open('token.json', 'w') as token:

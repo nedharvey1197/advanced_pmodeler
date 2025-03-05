@@ -13,12 +13,13 @@ This module provides comprehensive scenario management and analysis capabilities
 
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-import matplotlib.backends.backend_pdf as pdf
+# Advanced visualization imports - will be used for future features
+# import matplotlib.pyplot as plt
+# import matplotlib.backends.backend_pdf as pdf
 from typing import Dict, List, Any, Optional, Union, Tuple
 from datetime import datetime
 
-from ..models import (
+from advanced_pmodeler.models import (
     Scenario, Equipment, Product, CostDriver, FinancialProjection,
     get_session
 )
@@ -26,8 +27,9 @@ from .financial_service import (
     calculate_financial_projections,
     calculate_key_financial_metrics
 )
-from .visualization_services import plot_scenario_comparison
-from .optimization_services import OptimizationService
+# Advanced visualization service - will be used for future features
+# from .visualization_services import plot_scenario_comparison
+# from .optimization_services import OptimizationService
 
 class ScenarioManager:
     """

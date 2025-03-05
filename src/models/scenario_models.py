@@ -2,7 +2,7 @@
 from sqlalchemy import Column, Integer, String, Float, Boolean, Text
 from sqlalchemy.orm import relationship
 from datetime import datetime
-from .base import Base
+from .base_models import Base
 
 class Scenario(Base):
     __tablename__ = 'scenarios'

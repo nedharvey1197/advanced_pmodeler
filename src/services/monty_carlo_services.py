@@ -7,17 +7,19 @@ and risk in financial projections.
 
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-import scipy.stats as stats
+# Advanced visualization and statistical imports - will be used for future features
+# import matplotlib.pyplot as plt
+# import scipy.stats as stats
 import os
 from typing import Dict, List, Any, Optional
 from datetime import datetime
 
-from ..models import (
+from advanced_pmodeler.models import (
     Scenario, Equipment, Product, CostDriver, FinancialProjection,
     get_session
 )
-from .visualization_services import plot_monte_carlo_results
+# Advanced visualization service - will be used for future features
+# from .visualization_services import plot_monte_carlo_results
 
 class MonteCarloSimulation:
     def __init__(self, scenario_manager, scenario_id):

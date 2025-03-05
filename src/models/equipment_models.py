@@ -10,9 +10,10 @@ The Equipment model maintains relationships with:
     - CostDriver: The cost factors associated with using this equipment for products
 """
 
-from sqlalchemy import Column, Integer, String, Float, ForeignKey, Boolean
+from sqlalchemy import Column, Integer, String, Float, ForeignKey, Boolean, Text
 from sqlalchemy.orm import relationship
-from .base import Base
+from datetime import datetime
+from .base_models import Base
 
 class Equipment(Base):
     """
@@ -30,9 +31,21 @@ class Equipment(Base):
     
     # Basic equipment information
     name = Column(String(100), nullable=False)
-    cost = Column(Float, nullable=False)
-    useful_life = Column(Integer, nullable=False)  # in years
-    max_capacity = Column(Float, nullable=False)   # units per year
+    description = Column(Text)
+    created_at = Column(String, default=datetime.now().isoformat())
+    
+    # Equipment specifications
+    capacity = Column(Float, nullable=False)
+    utilization_rate = Column(Float, default=0.8)  # 80% default utilization
+    maintenance_cost = Column(Float, default=0.0)
+    depreciation_years = Column(Integer, default=10)
+    salvage_value = Column(Float, default=0.0)
+    
+    # Financial parameters
+    purchase_cost = Column(Float, nullable=False)
+    installation_cost = Column(Float, default=0.0)
+    operating_cost = Column(Float, default=0.0)
+    energy_cost = Column(Float, default=0.0)
     
     # Operational parameters
     maintenance_cost_pct = Column(Float, default=0.05)  # 5% of cost per year
@@ -52,7 +65,7 @@ class Equipment(Base):
     
     def __repr__(self):
         """String representation of the Equipment instance."""
-        return f"<Equipment(name='{self.name}', cost=${self.cost:,.2f})>"
+        return f"<Equipment(name='{self.name}', capacity={self.capacity})>"
         
     def calculate_annual_maintenance_cost(self) -> float:
         """
@@ -61,7 +74,7 @@ class Equipment(Base):
         Returns:
             float: Annual maintenance cost based on the equipment cost and maintenance percentage
         """
-        return self.cost * self.maintenance_cost_pct
+        return self.maintenance_cost * self.maintenance_cost_pct
         
     def calculate_effective_capacity(self) -> float:
         """
@@ -70,4 +83,4 @@ class Equipment(Base):
         Returns:
             float: Effective annual capacity in units
         """
-        return self.max_capacity * self.availability_pct
+        return self.capacity * self.availability_pct

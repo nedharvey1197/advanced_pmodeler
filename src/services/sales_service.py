@@ -12,13 +12,14 @@ import numpy as np
 import pandas as pd
 from typing import Dict, List, Any, Optional, Tuple, Union
 from datetime import datetime
+from sqlalchemy import and_
 
-from ..models import (
+from advanced_pmodeler.models import (
     Scenario, Product, FinancialProjection,
-    get_session
+    get_session, ServiceMixin
 )
 
-class SalesService:
+class SalesService(ServiceMixin):
     """
     Service class for sales forecasting and analysis.
     

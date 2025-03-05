@@ -1,18 +1,47 @@
 """
-Cost driver model for the manufacturing expansion financial model.
+Product and cost driver models for the manufacturing expansion financial model.
 
-This module defines the CostDriver SQLAlchemy model which represents the cost factors
-associated with manufacturing products using specific equipment. It captures both
-equipment-specific costs and various labor costs involved in the manufacturing process.
-
-The CostDriver model maintains relationships with:
-    - Product: The product being manufactured
-    - Equipment: The equipment used in manufacturing
+This module defines the Product and CostDriver SQLAlchemy models which represent
+products and their associated manufacturing costs.
 """
 
-from sqlalchemy import Column, Integer, Float, ForeignKey
+from sqlalchemy import Column, Integer, String, Float, ForeignKey, Boolean, Text
 from sqlalchemy.orm import relationship
-from .base import Base
+from datetime import datetime
+from .base_models import Base
+
+class Product(Base):
+    """
+    SQLAlchemy model representing a product.
+    
+    This class defines the core attributes of a product, including its specifications,
+    pricing, and production parameters.
+    """
+    
+    __tablename__ = 'products'
+    
+    id = Column(Integer, primary_key=True)
+    name = Column(String(100), nullable=False)
+    description = Column(Text)
+    created_at = Column(String, default=datetime.now().isoformat())
+    
+    # Product specifications
+    unit_price = Column(Float, nullable=False)
+    unit_cost = Column(Float, nullable=False)
+    target_margin = Column(Float, default=0.3)  # 30% default margin
+    
+    # Production parameters
+    production_rate = Column(Float, nullable=False)  # units per hour
+    setup_time = Column(Float, default=0.0)  # hours
+    quality_rate = Column(Float, default=0.98)  # 98% default quality rate
+    
+    # Relationships
+    scenario_id = Column(Integer, ForeignKey('scenarios.id'), nullable=False)
+    scenario = relationship("Scenario", back_populates="products")
+    cost_drivers = relationship("CostDriver", back_populates="product", cascade="all, delete-orphan")
+    
+    def __repr__(self):
+        return f"<Product(name='{self.name}', unit_price=${self.unit_price:,.2f})>"
 
 class CostDriver(Base):
     """

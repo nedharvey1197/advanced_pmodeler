@@ -1,0 +1,874 @@
+{
+  "tables": {
+    "cost_driver": {
+      "columns": {
+        "id": {
+          "type": "INTEGER",
+          "nullable": true,
+          "primary_key": 1,
+          "default": "None"
+        },
+        "product_id": {
+          "type": "INTEGER",
+          "nullable": true,
+          "primary_key": 0,
+          "default": "None"
+        },
+        "equipment_id": {
+          "type": "INTEGER",
+          "nullable": true,
+          "primary_key": 0,
+          "default": "None"
+        },
+        "cost_per_hour": {
+          "type": "REAL",
+          "nullable": true,
+          "primary_key": 0,
+          "default": "None"
+        },
+        "hours_per_unit": {
+          "type": "REAL",
+          "nullable": true,
+          "primary_key": 0,
+          "default": "None"
+        },
+        "materials_cost_per_unit": {
+          "type": "REAL",
+          "nullable": true,
+          "primary_key": 0,
+          "default": "None"
+        },
+        "machinist_labor_cost_per_hour": {
+          "type": "REAL",
+          "nullable": true,
+          "primary_key": 0,
+          "default": "None"
+        },
+        "machinist_hours_per_unit": {
+          "type": "REAL",
+          "nullable": true,
+          "primary_key": 0,
+          "default": "None"
+        },
+        "design_labor_cost_per_hour": {
+          "type": "REAL",
+          "nullable": true,
+          "primary_key": 0,
+          "default": "None"
+        },
+        "design_hours_per_unit": {
+          "type": "REAL",
+          "nullable": true,
+          "primary_key": 0,
+          "default": "None"
+        },
+        "supervision_cost_per_hour": {
+          "type": "REAL",
+          "nullable": true,
+          "primary_key": 0,
+          "default": "None"
+        },
+        "supervision_hours_per_unit": {
+          "type": "REAL",
+          "nullable": true,
+          "primary_key": 0,
+          "default": "None"
+        }
+      },
+      "foreign_keys": [
+        {
+          "referred_table": "product",
+          "referred_columns": [
+            "id"
+          ],
+          "constrained_columns": [
+            "product_id"
+          ]
+        },
+        {
+          "referred_table": "equipment",
+          "referred_columns": [
+            "id"
+          ],
+          "constrained_columns": [
+            "equipment_id"
+          ]
+        }
+      ]
+    },
+    "equipment": {
+      "columns": {
+        "id": {
+          "type": "INTEGER",
+          "nullable": true,
+          "primary_key": 1,
+          "default": "None"
+        },
+        "scenario_id": {
+          "type": "INTEGER",
+          "nullable": true,
+          "primary_key": 0,
+          "default": "None"
+        },
+        "name": {
+          "type": "TEXT",
+          "nullable": false,
+          "primary_key": 0,
+          "default": "None"
+        },
+        "cost": {
+          "type": "REAL",
+          "nullable": true,
+          "primary_key": 0,
+          "default": "None"
+        },
+        "useful_life": {
+          "type": "INTEGER",
+          "nullable": true,
+          "primary_key": 0,
+          "default": "None"
+        },
+        "max_capacity": {
+          "type": "REAL",
+          "nullable": true,
+          "primary_key": 0,
+          "default": "None"
+        },
+        "maintenance_cost_pct": {
+          "type": "REAL",
+          "nullable": true,
+          "primary_key": 0,
+          "default": "None"
+        },
+        "availability_pct": {
+          "type": "REAL",
+          "nullable": true,
+          "primary_key": 0,
+          "default": "None"
+        },
+        "purchase_year": {
+          "type": "INTEGER",
+          "nullable": true,
+          "primary_key": 0,
+          "default": "None"
+        },
+        "financing_type": {
+          "type": "TEXT",
+          "nullable": true,
+          "primary_key": 0,
+          "default": "None"
+        },
+        "is_leased": {
+          "type": "INTEGER",
+          "nullable": true,
+          "primary_key": 0,
+          "default": "None"
+        },
+        "lease_type": {
+          "type": "TEXT",
+          "nullable": true,
+          "primary_key": 0,
+          "default": "None"
+        },
+        "lease_rate": {
+          "type": "REAL",
+          "nullable": true,
+          "primary_key": 0,
+          "default": "None"
+        },
+        "debt_ratio": {
+          "type": "REAL",
+          "nullable": true,
+          "primary_key": 0,
+          "default": "None"
+        },
+        "interest_rate": {
+          "type": "REAL",
+          "nullable": true,
+          "primary_key": 0,
+          "default": "None"
+        }
+      },
+      "foreign_keys": [
+        {
+          "referred_table": "scenario",
+          "referred_columns": [
+            "id"
+          ],
+          "constrained_columns": [
+            "scenario_id"
+          ]
+        }
+      ]
+    },
+    "financial_projection": {
+      "columns": {
+        "id": {
+          "type": "INTEGER",
+          "nullable": true,
+          "primary_key": 1,
+          "default": "None"
+        },
+        "scenario_id": {
+          "type": "INTEGER",
+          "nullable": true,
+          "primary_key": 0,
+          "default": "None"
+        },
+        "year": {
+          "type": "INTEGER",
+          "nullable": true,
+          "primary_key": 0,
+          "default": "None"
+        },
+        "revenue": {
+          "type": "REAL",
+          "nullable": true,
+          "primary_key": 0,
+          "default": "None"
+        },
+        "cogs": {
+          "type": "REAL",
+          "nullable": true,
+          "primary_key": 0,
+          "default": "None"
+        },
+        "gross_profit": {
+          "type": "REAL",
+          "nullable": true,
+          "primary_key": 0,
+          "default": "None"
+        },
+        "operating_expenses": {
+          "type": "REAL",
+          "nullable": true,
+          "primary_key": 0,
+          "default": "None"
+        },
+        "ebitda": {
+          "type": "REAL",
+          "nullable": true,
+          "primary_key": 0,
+          "default": "None"
+        },
+        "depreciation": {
+          "type": "REAL",
+          "nullable": true,
+          "primary_key": 0,
+          "default": "None"
+        },
+        "ebit": {
+          "type": "REAL",
+          "nullable": true,
+          "primary_key": 0,
+          "default": "None"
+        },
+        "interest": {
+          "type": "REAL",
+          "nullable": true,
+          "primary_key": 0,
+          "default": "None"
+        },
+        "tax": {
+          "type": "REAL",
+          "nullable": true,
+          "primary_key": 0,
+          "default": "None"
+        },
+        "net_income": {
+          "type": "REAL",
+          "nullable": true,
+          "primary_key": 0,
+          "default": "None"
+        },
+        "capacity_utilization": {
+          "type": "REAL",
+          "nullable": true,
+          "primary_key": 0,
+          "default": "None"
+        }
+      },
+      "foreign_keys": [
+        {
+          "referred_table": "scenario",
+          "referred_columns": [
+            "id"
+          ],
+          "constrained_columns": [
+            "scenario_id"
+          ]
+        }
+      ]
+    },
+    "product": {
+      "columns": {
+        "id": {
+          "type": "INTEGER",
+          "nullable": true,
+          "primary_key": 1,
+          "default": "None"
+        },
+        "scenario_id": {
+          "type": "INTEGER",
+          "nullable": true,
+          "primary_key": 0,
+          "default": "None"
+        },
+        "name": {
+          "type": "TEXT",
+          "nullable": false,
+          "primary_key": 0,
+          "default": "None"
+        },
+        "initial_units": {
+          "type": "REAL",
+          "nullable": true,
+          "primary_key": 0,
+          "default": "None"
+        },
+        "unit_price": {
+          "type": "REAL",
+          "nullable": true,
+          "primary_key": 0,
+          "default": "None"
+        },
+        "growth_rate": {
+          "type": "REAL",
+          "nullable": true,
+          "primary_key": 0,
+          "default": "None"
+        },
+        "introduction_year": {
+          "type": "INTEGER",
+          "nullable": true,
+          "primary_key": 0,
+          "default": "None"
+        },
+        "market_size": {
+          "type": "REAL",
+          "nullable": true,
+          "primary_key": 0,
+          "default": "None"
+        },
+        "price_elasticity": {
+          "type": "REAL",
+          "nullable": true,
+          "primary_key": 0,
+          "default": "None"
+        }
+      },
+      "foreign_keys": [
+        {
+          "referred_table": "scenario",
+          "referred_columns": [
+            "id"
+          ],
+          "constrained_columns": [
+            "scenario_id"
+          ]
+        }
+      ]
+    },
+    "scenario": {
+      "columns": {
+        "id": {
+          "type": "INTEGER",
+          "nullable": true,
+          "primary_key": 1,
+          "default": "None"
+        },
+        "name": {
+          "type": "TEXT",
+          "nullable": false,
+          "primary_key": 0,
+          "default": "None"
+        },
+        "description": {
+          "type": "TEXT",
+          "nullable": true,
+          "primary_key": 0,
+          "default": "None"
+        },
+        "initial_revenue": {
+          "type": "REAL",
+          "nullable": true,
+          "primary_key": 0,
+          "default": "None"
+        },
+        "initial_costs": {
+          "type": "REAL",
+          "nullable": true,
+          "primary_key": 0,
+          "default": "None"
+        },
+        "annual_revenue_growth": {
+          "type": "REAL",
+          "nullable": true,
+          "primary_key": 0,
+          "default": "None"
+        },
+        "annual_cost_growth": {
+          "type": "REAL",
+          "nullable": true,
+          "primary_key": 0,
+          "default": "None"
+        },
+        "debt_ratio": {
+          "type": "REAL",
+          "nullable": true,
+          "primary_key": 0,
+          "default": "None"
+        },
+        "interest_rate": {
+          "type": "REAL",
+          "nullable": true,
+          "primary_key": 0,
+          "default": "None"
+        },
+        "tax_rate": {
+          "type": "REAL",
+          "nullable": true,
+          "primary_key": 0,
+          "default": "None"
+        },
+        "is_base_case": {
+          "type": "INTEGER",
+          "nullable": true,
+          "primary_key": 0,
+          "default": "None"
+        },
+        "created_at": {
+          "type": "TEXT",
+          "nullable": true,
+          "primary_key": 0,
+          "default": "None"
+        }
+      },
+      "foreign_keys": []
+    }
+  },
+  "models": {
+    "Scenario": {
+      "table_name": "scenarios",
+      "attributes": [
+        "equipment",
+        "products",
+        "financials",
+        "sales_parameters",
+        "sales_forecasts",
+        "ga_expenses",
+        "assumptions",
+        "id",
+        "name",
+        "description",
+        "created_at",
+        "is_base_case",
+        "initial_revenue",
+        "initial_costs",
+        "annual_revenue_growth",
+        "annual_cost_growth",
+        "debt_ratio",
+        "interest_rate",
+        "tax_rate"
+      ],
+      "relationships": [
+        "equipment -> Equipment",
+        "products -> Product",
+        "financials -> FinancialProjection",
+        "sales_parameters -> SalesParameter",
+        "sales_forecasts -> SalesForecast",
+        "ga_expenses -> GAExpense",
+        "assumptions -> ScenarioAssumption"
+      ]
+    },
+    "Equipment": {
+      "table_name": "equipment",
+      "attributes": [
+        "scenario",
+        "cost_drivers",
+        "id",
+        "scenario_id",
+        "name",
+        "description",
+        "created_at",
+        "capacity",
+        "utilization_rate",
+        "maintenance_cost",
+        "depreciation_years",
+        "salvage_value",
+        "purchase_cost",
+        "installation_cost",
+        "operating_cost",
+        "energy_cost",
+        "maintenance_cost_pct",
+        "availability_pct",
+        "purchase_year",
+        "is_leased",
+        "lease_rate",
+        "lease_type",
+        "lease_term",
+        "lease_payment"
+      ],
+      "relationships": [
+        "scenario -> Scenario",
+        "cost_drivers -> CostDriver"
+      ]
+    },
+    "Product": {
+      "table_name": "products",
+      "attributes": [
+        "scenario",
+        "cost_drivers",
+        "id",
+        "name",
+        "description",
+        "created_at",
+        "unit_price",
+        "unit_cost",
+        "target_margin",
+        "production_rate",
+        "setup_time",
+        "quality_rate",
+        "scenario_id"
+      ],
+      "relationships": [
+        "scenario -> Scenario",
+        "cost_drivers -> CostDriver"
+      ]
+    },
+    "CostDriver": {
+      "table_name": "cost_drivers",
+      "attributes": [
+        "product",
+        "equipment",
+        "id",
+        "product_id",
+        "equipment_id",
+        "cost_per_hour",
+        "hours_per_unit",
+        "materials_cost_per_unit",
+        "machinist_labor_cost_per_hour",
+        "machinist_hours_per_unit",
+        "design_labor_cost_per_hour",
+        "design_hours_per_unit",
+        "supervision_cost_per_hour",
+        "supervision_hours_per_unit"
+      ],
+      "relationships": [
+        "product -> Product",
+        "equipment -> Equipment"
+      ]
+    },
+    "FinancialProjection": {
+      "table_name": "financial_projections",
+      "attributes": [
+        "scenario",
+        "id",
+        "created_at",
+        "scenario_id",
+        "year",
+        "revenue",
+        "cogs",
+        "gross_profit",
+        "operating_expenses",
+        "ebitda",
+        "depreciation",
+        "ebit",
+        "interest",
+        "tax",
+        "net_income",
+        "cash",
+        "accounts_receivable",
+        "inventory",
+        "fixed_assets",
+        "accumulated_depreciation",
+        "total_assets",
+        "accounts_payable",
+        "long_term_debt",
+        "equity",
+        "operating_cash_flow",
+        "investing_cash_flow",
+        "financing_cash_flow",
+        "net_cash_flow",
+        "total_production",
+        "capacity_utilization",
+        "product_details"
+      ],
+      "relationships": [
+        "scenario -> Scenario"
+      ]
+    },
+    "SalesParameter": {
+      "table_name": "sales_parameters",
+      "attributes": [
+        "scenario",
+        "id",
+        "scenario_id",
+        "name",
+        "category",
+        "value",
+        "is_percentage",
+        "description",
+        "created_at"
+      ],
+      "relationships": [
+        "scenario -> Scenario"
+      ]
+    },
+    "SalesForecast": {
+      "table_name": "sales_forecasts",
+      "attributes": [
+        "scenario",
+        "product_forecasts",
+        "id",
+        "scenario_id",
+        "year",
+        "is_market_driven",
+        "total_revenue",
+        "pipeline_metrics",
+        "staffing_requirements",
+        "channel_distribution",
+        "created_at"
+      ],
+      "relationships": [
+        "scenario -> Scenario",
+        "product_forecasts -> ProductForecast"
+      ]
+    },
+    "ProductForecast": {
+      "table_name": "product_forecasts",
+      "attributes": [
+        "sales_forecast",
+        "product",
+        "id",
+        "sales_forecast_id",
+        "product_id",
+        "unit_volume",
+        "revenue",
+        "market_share",
+        "internal_capacity",
+        "outsourcing_required",
+        "created_at"
+      ],
+      "relationships": [
+        "sales_forecast -> SalesForecast",
+        "product -> Product"
+      ]
+    },
+    "GAExpense": {
+      "table_name": "ga_expenses",
+      "attributes": [
+        "scenario",
+        "id",
+        "scenario_id",
+        "year",
+        "category",
+        "amount",
+        "percent_of_revenue",
+        "headcount",
+        "calculation_basis",
+        "calculation_formula",
+        "additional_details",
+        "created_at"
+      ],
+      "relationships": [
+        "scenario -> Scenario"
+      ]
+    },
+    "IndustryStandard": {
+      "table_name": "industry_standards",
+      "attributes": [
+        "id",
+        "industry_type",
+        "category",
+        "parameter_name",
+        "display_name",
+        "description",
+        "min_value",
+        "max_value",
+        "typical_value",
+        "is_percentage",
+        "created_at",
+        "updated_at"
+      ],
+      "relationships": []
+    },
+    "ScenarioAssumption": {
+      "table_name": "scenario_assumptions",
+      "attributes": [
+        "scenario",
+        "industry_standard",
+        "id",
+        "scenario_id",
+        "industry_standard_id",
+        "value",
+        "notes",
+        "is_validated",
+        "validation_message",
+        "created_at",
+        "updated_at"
+      ],
+      "relationships": [
+        "scenario -> Scenario",
+        "industry_standard -> IndustryStandard"
+      ]
+    }
+  },
+  "services": {
+    "advanced_fin_Services": {
+      "models_used": [],
+      "dependencies": []
+    },
+    "sales_service": {
+      "models_used": [],
+      "dependencies": [
+        "financial_service"
+      ]
+    },
+    "spreadsheet_services": {
+      "models_used": [],
+      "dependencies": []
+    },
+    "visualization_services": {
+      "models_used": [],
+      "dependencies": []
+    },
+    "monty_carlo_services": {
+      "models_used": [],
+      "dependencies": [
+        "visualization_services",
+        "financial_service"
+      ]
+    },
+    "scenario_service": {
+      "models_used": [],
+      "dependencies": [
+        "optimization_services",
+        "visualization_services",
+        "financial_service"
+      ]
+    },
+    "template_service": {
+      "models_used": [],
+      "dependencies": [
+        "spreadsheet_services"
+      ]
+    },
+    "assumptions_service": {
+      "models_used": [
+        "Scenario"
+      ],
+      "dependencies": []
+    },
+    "ga_services": {
+      "models_used": [
+        "Scenario"
+      ],
+      "dependencies": [
+        "equipment_service",
+        "sales_service",
+        "financial_service"
+      ]
+    },
+    "equipment_service": {
+      "models_used": [],
+      "dependencies": [
+        "financial_service"
+      ]
+    },
+    "optimization_services": {
+      "models_used": [
+        "Equipment",
+        "Scenario"
+      ],
+      "dependencies": [
+        "equipment_service",
+        "financial_service"
+      ]
+    },
+    "financial_service": {
+      "models_used": [
+        "Equipment"
+      ],
+      "dependencies": [
+        "advanced_fin_Services",
+        "equipment_service",
+        "sales_service"
+      ]
+    }
+  },
+  "relationships": {},
+  "service_dependencies": {
+    "advanced_fin_Services": [],
+    "sales_service": [
+      "financial_service"
+    ],
+    "spreadsheet_services": [],
+    "visualization_services": [],
+    "monty_carlo_services": [
+      "visualization_services",
+      "financial_service"
+    ],
+    "scenario_service": [
+      "optimization_services",
+      "visualization_services",
+      "financial_service"
+    ],
+    "template_service": [
+      "spreadsheet_services"
+    ],
+    "assumptions_service": [],
+    "ga_services": [
+      "equipment_service",
+      "sales_service",
+      "financial_service"
+    ],
+    "equipment_service": [
+      "financial_service"
+    ],
+    "optimization_services": [
+      "equipment_service",
+      "financial_service"
+    ],
+    "financial_service": [
+      "advanced_fin_Services",
+      "equipment_service",
+      "sales_service"
+    ]
+  },
+  "model_usage": {
+    "Scenario": [
+      "ga_services",
+      "assumptions_service",
+      "optimization_services"
+    ],
+    "Equipment": [
+      "optimization_services",
+      "financial_service"
+    ]
+  },
+  "validation_errors": [
+    "Table scenarios not found in database",
+    "Table products not found in database",
+    "Table cost_drivers not found in database",
+    "Table financial_projections not found in database",
+    "Table sales_parameters not found in database",
+    "Table sales_forecasts not found in database",
+    "Table product_forecasts not found in database",
+    "Table ga_expenses not found in database",
+    "Table industry_standards not found in database",
+    "Table scenario_assumptions not found in database",
+    "Table cost_driver has no corresponding model",
+    "Table financial_projection has no corresponding model",
+    "Table product has no corresponding model",
+    "Table scenario has no corresponding model",
+    "Circular dependency detected: equipment_service -> financial_service",
+    "Circular dependency detected: sales_service -> financial_service"
+  ],
+  "last_updated": "2025-03-05T15:04:00.415249",
+  "metadata": {
+    "database_path": "/Users/nedharvey/Development/personal/advanced_pmodeler/data/manufacturing_model.db",
+    "models_path": "/Users/nedharvey/Development/personal/advanced_pmodeler/src/models",
+    "services_path": "/Users/nedharvey/Development/personal/advanced_pmodeler/src/services"
+  }
+}

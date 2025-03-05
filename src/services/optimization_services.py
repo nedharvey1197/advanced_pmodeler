@@ -8,27 +8,21 @@ This module provides comprehensive optimization capabilities including:
 - Scenario optimization
 """
 
-import numpy as np
-import pandas as pd
-from typing import Dict, List, Any, Optional, Union
+from typing import Dict, List, Any, Optional
 from datetime import datetime
 
-from ..models import (
-    Scenario, Equipment, Product, CostDriver, FinancialProjection,
-    get_session
-)
+from advanced_pmodeler.models import Scenario
+
 
 class OptimizationService:
-    """
-    Service class for managing optimization operations.
+    """Service class for managing optimization operations.
     
     This class coordinates different types of optimization and ensures
     proper integration with financial projections and scenario management.
     """
     
     def __init__(self, scenario_manager):
-        """
-        Initialize OptimizationService with a scenario manager.
+        """Initialize OptimizationService with a scenario manager.
         
         Args:
             scenario_manager: ScenarioManager instance
@@ -39,8 +33,7 @@ class OptimizationService:
     def optimize_scenario(self, scenario_id: int,
                          optimization_type: str,
                          constraints: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Optimize a scenario based on specified type and constraints.
+        """Optimize a scenario based on specified type and constraints.
         
         Args:
             scenario_id: ID of the scenario to optimize
@@ -61,8 +54,7 @@ class OptimizationService:
     
     def _optimize_equipment(self, scenario_id: int,
                           constraints: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Optimize equipment purchases and utilization.
+        """Optimize equipment purchases and utilization.
         
         Args:
             scenario_id: ID of the scenario to optimize
@@ -95,8 +87,7 @@ class OptimizationService:
     
     def _optimize_production(self, scenario_id: int,
                            constraints: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Optimize production mix and scheduling.
+        """Optimize production mix and scheduling.
         
         Args:
             scenario_id: ID of the scenario to optimize
@@ -106,12 +97,12 @@ class OptimizationService:
             Dictionary containing production optimization results
         """
         # This is a placeholder for future implementation
-        return {"status": "not_implemented", "message": "Production optimization will be implemented in Phase 2"}
+        return {"status": "not_implemented", 
+                "message": "Production optimization will be implemented in Phase 2"}
     
     def _optimize_staffing(self, scenario_id: int,
                          constraints: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Optimize staffing levels and scheduling.
+        """Optimize staffing levels and scheduling.
         
         Args:
             scenario_id: ID of the scenario to optimize
@@ -121,12 +112,12 @@ class OptimizationService:
             Dictionary containing staffing optimization results
         """
         # This is a placeholder for future implementation
-        return {"status": "not_implemented", "message": "Staffing optimization will be implemented in Phase 2"}
+        return {"status": "not_implemented", 
+                "message": "Staffing optimization will be implemented in Phase 2"}
     
     def _update_financial_projections(self, scenario_id: int,
                                     optimization_results: Dict[str, Any]) -> None:
-        """
-        Update financial projections based on optimization results.
+        """Update financial projections based on optimization results.
         
         Args:
             scenario_id: ID of the scenario to update
@@ -136,14 +127,15 @@ class OptimizationService:
         financial_service = FinancialService(self.session)
         
         # Recalculate financial projections with optimization impacts
-        projections = financial_service.calculate_financial_projections(
+        financial_service.calculate_financial_projections(
             scenario_id,
             use_optimization=True,
             optimization_results=optimization_results
         )
         
         # Store optimization metadata
-        scenario = self.session.query(Scenario).filter(Scenario.id == scenario_id).first()
+        scenario = self.session.query(Scenario).filter(
+            Scenario.id == scenario_id).first()
         if scenario:
             scenario.optimization_metadata = {
                 "last_optimized": datetime.now().isoformat(),
@@ -151,60 +143,79 @@ class OptimizationService:
             }
             self.session.commit()
 
-def optimize_production_mix(scenario_id: int, year: int, constraints: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    """
-    Optimize production mix for maximum profit
+
+def optimize_production_mix(scenario_id: int, year: int, 
+                          constraints: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Optimize production mix for maximum profit.
     
-    :param scenario_id: ID of the scenario
-    :param year: Year to optimize for
-    :param constraints: Optional constraints for optimization
-    :return: Production mix optimization results
+    Args:
+        scenario_id: ID of the scenario
+        year: Year to optimize for
+        constraints: Optional constraints for optimization
+        
+    Returns:
+        Production mix optimization results
     """
     # This function is a placeholder for future implementation
     # It will use linear programming to optimize the production mix
     # based on equipment constraints and product profitability
-    return {"status": "not_implemented", "message": "Production mix optimization will be implemented in Phase 2"}
+    return {"status": "not_implemented", 
+            "message": "Production mix optimization will be implemented in Phase 2"}
 
-def optimize_equipment_leasing(scenario_id: int, available_equipment: List[Dict[str, Any]], 
-                              budget_constraint: Optional[float] = None) -> Dict[str, Any]:
-    """
-    Optimize equipment leasing vs. purchasing decisions
+
+def optimize_equipment_leasing(scenario_id: int, 
+                            available_equipment: List[Dict[str, Any]], 
+                            budget_constraint: Optional[float] = None) -> Dict[str, Any]:
+    """Optimize equipment leasing vs. purchasing decisions.
     
-    :param scenario_id: ID of the scenario
-    :param available_equipment: List of available equipment to consider
-    :param budget_constraint: Optional budget constraint
-    :return: Equipment leasing optimization results
+    Args:
+        scenario_id: ID of the scenario
+        available_equipment: List of available equipment to consider
+        budget_constraint: Optional budget constraint
+        
+    Returns:
+        Equipment leasing optimization results
     """
     # This function is a placeholder for future implementation
     # It will compare leasing vs. purchasing options for equipment
     # based on financial constraints and projected utilization
-    return {"status": "not_implemented", "message": "Equipment leasing optimization will be implemented in Phase 2"}
+    return {"status": "not_implemented", 
+            "message": "Equipment leasing optimization will be implemented in Phase 2"}
 
-def optimize_staffing(scenario_id: int, year: int, labor_categories: Optional[List[str]] = None) -> Dict[str, Any]:
-    """
-    Optimize staffing levels based on production requirements
+
+def optimize_staffing(scenario_id: int, year: int, 
+                     labor_categories: Optional[List[str]] = None) -> Dict[str, Any]:
+    """Optimize staffing levels based on production requirements.
     
-    :param scenario_id: ID of the scenario
-    :param year: Year to optimize for
-    :param labor_categories: Optional list of labor categories to consider
-    :return: Staffing optimization results
+    Args:
+        scenario_id: ID of the scenario
+        year: Year to optimize for
+        labor_categories: Optional list of labor categories to consider
+        
+    Returns:
+        Staffing optimization results
     """
     # This function is a placeholder for future implementation
     # It will calculate optimal staffing levels based on production volumes
     # and labor requirements for each product
-    return {"status": "not_implemented", "message": "Staffing optimization will be implemented in Phase 2"}
+    return {"status": "not_implemented", 
+            "message": "Staffing optimization will be implemented in Phase 2"}
+
 
 def run_monte_carlo_simulation(scenario_id: int, iterations: int = 1000, 
-                              variables: Optional[List[str]] = None) -> Dict[str, Any]:
-    """
-    Run Monte Carlo simulation for scenario analysis
+                             variables: Optional[List[str]] = None) -> Dict[str, Any]:
+    """Run Monte Carlo simulation for scenario analysis.
     
-    :param scenario_id: ID of the scenario
-    :param iterations: Number of simulation iterations
-    :param variables: Optional list of variables to simulate
-    :return: Monte Carlo simulation results
+    Args:
+        scenario_id: ID of the scenario
+        iterations: Number of simulation iterations
+        variables: Optional list of variables to simulate
+        
+    Returns:
+        Monte Carlo simulation results
     """
     # This function is a placeholder for future implementation
     # It will run Monte Carlo simulation to analyze risk and uncertainty
     # in financial projections
-    return {"status": "not_implemented", "message": "Monte Carlo simulation will be implemented in Phase 2"}
+    return {"status": "not_implemented", 
+            "message": "Monte Carlo simulation will be implemented in Phase 2"}

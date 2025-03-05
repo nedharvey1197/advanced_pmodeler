@@ -1,9 +1,8 @@
 from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey, JSON, DateTime
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-from sqlalchemy.ext.declarative import declarative_base
-
-Base = declarative_base()
+from datetime import datetime
+from .base_models import Base
 
 class SalesParameter(Base):
     __tablename__ = 'sales_parameters'
@@ -15,8 +14,7 @@ class SalesParameter(Base):
     value = Column(Float)
     is_percentage = Column(Boolean, default=False)
     description = Column(String(500))
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    created_at = Column(String, default=datetime.now().isoformat())
 
     scenario = relationship("Scenario", back_populates="sales_parameters")
 
@@ -31,8 +29,7 @@ class SalesForecast(Base):
     pipeline_metrics = Column(JSON)  # Stores prospects, leads, opportunities
     staffing_requirements = Column(JSON)  # Sales team staffing details
     channel_distribution = Column(JSON)  # Channel breakdown
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    created_at = Column(String, default=datetime.now().isoformat())
 
     scenario = relationship("Scenario", back_populates="sales_forecasts")
     product_forecasts = relationship("ProductForecast", back_populates="sales_forecast")
@@ -48,8 +45,7 @@ class ProductForecast(Base):
     market_share = Column(Float)
     internal_capacity = Column(Integer)
     outsourcing_required = Column(Integer)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    created_at = Column(String, default=datetime.now().isoformat())
 
     sales_forecast = relationship("SalesForecast", back_populates="product_forecasts")
     product = relationship("Product") 

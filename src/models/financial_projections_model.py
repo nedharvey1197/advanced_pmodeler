@@ -9,9 +9,10 @@ The FinancialProjection model maintains relationships with:
     - Scenario: The business scenario these projections belong to
 """
 
-from sqlalchemy import Column, Integer, Float, ForeignKey, JSON
+from sqlalchemy import Column, Integer, String, Float, ForeignKey, Boolean, Text
 from sqlalchemy.orm import relationship
-from .base import Base
+from datetime import datetime
+from .base_models import Base
 
 class FinancialProjection(Base):
     """
@@ -26,7 +27,8 @@ class FinancialProjection(Base):
     
     # Primary key and foreign key relationships
     id = Column(Integer, primary_key=True)
-    scenario_id = Column(Integer, ForeignKey('scenarios.id'))
+    created_at = Column(String, default=datetime.now().isoformat())
+    scenario_id = Column(Integer, ForeignKey('scenarios.id'), nullable=False)
     year = Column(Integer, nullable=False)
     
     # Income Statement metrics
@@ -49,10 +51,8 @@ class FinancialProjection(Base):
     accumulated_depreciation = Column(Float, default=0.0)
     total_assets = Column(Float, default=0.0)
     accounts_payable = Column(Float, default=0.0)
-    short_term_debt = Column(Float, default=0.0)
     long_term_debt = Column(Float, default=0.0)
     equity = Column(Float, default=0.0)
-    total_liabilities_and_equity = Column(Float, default=0.0)
     
     # Cash Flow metrics
     operating_cash_flow = Column(Float, default=0.0)
@@ -65,14 +65,14 @@ class FinancialProjection(Base):
     capacity_utilization = Column(Float, default=0.0)  # percentage
     
     # Product-specific projections stored as JSON
-    product_details = Column(JSON)  # Store as JSON for flexibility
+    product_details = Column(Text)  # Store as Text for flexibility
     
     # Relationships
     scenario = relationship("Scenario", back_populates="financials")
     
     def __repr__(self):
         """String representation of the FinancialProjection instance."""
-        return f"<FinancialProjection(scenario_id={self.scenario_id}, year={self.year})>"
+        return f"<FinancialProjection(year={self.year}, revenue=${self.revenue:,.2f})>"
         
     def calculate_gross_margin(self) -> float:
         """

@@ -13,16 +13,16 @@ streamlit-option-menu>=0.3.0
 streamlit-aggrid>=0.3.0
 streamlit-elements>=0.1.0
 
-# File Handling
-streamlit-uploader>=0.2.0
-streamlit-download-button>=0.1.0
+# File Handling & UI Components
+streamlit-extras[file-handler]>=0.3.0
 
-# Authentication
+# Authentication & Security
 streamlit-authenticator>=0.2.0
+extra-streamlit-components>=0.1.56
 
-# Styling
-streamlit-custom-notification>=0.1.0
-streamlit-toggle-switch>=0.1.0
+# Styling & UI
+hydralit>=1.0.14
+hydralit-components>=1.0.10
 
 # Dependencies
 -r base.txt 

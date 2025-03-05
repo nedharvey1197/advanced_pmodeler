@@ -16,7 +16,7 @@ import pandas as pd
 from typing import Dict, List, Any, Optional
 from datetime import datetime
 
-from ..models import (
+from advanced_pmodeler.models import (
     Scenario, Equipment, Product, CostDriver, FinancialProjection,
     get_session
 )

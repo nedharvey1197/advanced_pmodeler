@@ -1,9 +1,8 @@
 from sqlalchemy import Column, Integer, String, Float, ForeignKey, JSON, DateTime
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-from sqlalchemy.ext.declarative import declarative_base
-
-Base = declarative_base()
+from datetime import datetime
+from .base_models import Base
 
 class GAExpense(Base):
     __tablename__ = 'ga_expenses'
@@ -18,7 +17,6 @@ class GAExpense(Base):
     calculation_basis = Column(String(500))
     calculation_formula = Column(String(500))
     additional_details = Column(JSON)  # For storing any additional category-specific details
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    created_at = Column(String, default=datetime.now().isoformat())
 
     scenario = relationship("Scenario", back_populates="ga_expenses") 

@@ -1,9 +1,8 @@
 from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey, JSON, DateTime
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-from sqlalchemy.ext.declarative import declarative_base
-
-Base = declarative_base()
+from datetime import datetime
+from .base_models import Base
 
 class IndustryStandard(Base):
     __tablename__ = 'industry_standards'
@@ -18,7 +17,7 @@ class IndustryStandard(Base):
     max_value = Column(Float)
     typical_value = Column(Float)
     is_percentage = Column(Boolean, default=False)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_at = Column(String, default=datetime.now().isoformat())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
 class ScenarioAssumption(Base):
@@ -31,7 +30,7 @@ class ScenarioAssumption(Base):
     notes = Column(String(500))
     is_validated = Column(Boolean, default=False)
     validation_message = Column(String(500))
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_at = Column(String, default=datetime.now().isoformat())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     scenario = relationship("Scenario", back_populates="assumptions")
