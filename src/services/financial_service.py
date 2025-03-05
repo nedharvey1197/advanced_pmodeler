@@ -7,6 +7,11 @@ This module provides comprehensive financial modeling capabilities including:
 - Financial projections generation
 - Key financial metrics computation
 - Scenario cloning and management
+- Integration with advanced financial modeling
+- Support for optimization-based projections
+
+For detailed information about the integration between basic and advanced financial modeling,
+see financial_modeling_README.md
 """
 
 import numpy as np
@@ -19,6 +24,7 @@ from ..models import (
     Scenario, Equipment, Product, CostDriver, FinancialProjection,
     get_session
 )
+from .advanced_fin_Services import AdvancedFinancialModeling
 
 class FinancialService:
     """
@@ -26,6 +32,9 @@ class FinancialService:
     
     This class provides methods for calculating various financial metrics,
     generating projections, and managing financial scenarios.
+    
+    For advanced financial modeling capabilities, use get_advanced_modeling()
+    to access the AdvancedFinancialModeling instance.
     """
     
     def __init__(self, session):
@@ -36,6 +45,73 @@ class FinancialService:
             session: SQLAlchemy database session
         """
         self.session = session
+        self._advanced_modeling = None
+    
+    def get_advanced_modeling(self) -> AdvancedFinancialModeling:
+        """
+        Get or create the AdvancedFinancialModeling instance.
+        
+        Returns:
+            AdvancedFinancialModeling instance for advanced financial analysis
+        """
+        if not self._advanced_modeling:
+            scenario = self.session.query(Scenario).first()
+            if not scenario:
+                raise ValueError("No scenario found in the database")
+            self._advanced_modeling = AdvancedFinancialModeling(scenario, self.session)
+        return self._advanced_modeling
+    
+    def get_comprehensive_analysis(self, scenario_id: int) -> Dict[str, Any]:
+        """
+        Get both basic and advanced financial analysis for a scenario.
+        
+        Args:
+            scenario_id: ID of the scenario to analyze
+            
+        Returns:
+            Dictionary containing both basic and advanced analysis results
+        """
+        # Get basic metrics
+        basic_metrics = self.calculate_key_financial_metrics(scenario_id)
+        
+        # Get financial projections
+        projections = self.calculate_financial_projections(scenario_id)
+        
+        # Get advanced analysis
+        advanced_analysis = self.get_advanced_modeling()
+        advanced_metrics = advanced_analysis.generate_comprehensive_financial_analysis(projections)
+        
+        return {
+            "basic_metrics": basic_metrics,
+            "advanced_analysis": advanced_metrics,
+            "timestamp": datetime.now().isoformat()
+        }
+    
+    def get_risk_adjusted_metrics(self, scenario_id: int) -> Dict[str, Any]:
+        """
+        Get risk-adjusted financial metrics using advanced modeling.
+        
+        Args:
+            scenario_id: ID of the scenario to analyze
+            
+        Returns:
+            Dictionary containing risk-adjusted metrics
+        """
+        projections = self.calculate_financial_projections(scenario_id)
+        advanced_analysis = self.get_advanced_modeling()
+        
+        # Get risk-adjusted cash flow
+        cash_flow_analysis = advanced_analysis.calculate_advanced_cash_flow(projections)
+        
+        # Get tax optimization
+        tax_analysis = advanced_analysis.calculate_advanced_tax_strategy(projections)
+        
+        return {
+            "risk_adjusted_cash_flow": cash_flow_analysis,
+            "tax_optimization": tax_analysis,
+            "risk_factors": advanced_analysis.risk_factors,
+            "working_capital": advanced_analysis.working_capital_params
+        }
     
     def calculate_unit_economics(self, product_id: int) -> Dict[str, Any]:
         """
@@ -182,13 +258,18 @@ class FinancialService:
         
         return result
     
-    def calculate_financial_projections(self, scenario_id: int, projection_years: int = 5) -> List[FinancialProjection]:
+    def calculate_financial_projections(self, scenario_id: int,
+                                     projection_years: int = 5,
+                                     use_optimization: bool = False,
+                                     optimization_results: Optional[Dict[str, Any]] = None) -> List[FinancialProjection]:
         """
         Generate comprehensive financial projections for a scenario.
         
         Args:
             scenario_id: ID of the scenario to project
             projection_years: Number of years to project (default: 5)
+            use_optimization: Whether to use optimization results
+            optimization_results: Optional optimization results to apply
             
         Returns:
             List of FinancialProjection objects containing:
@@ -214,9 +295,16 @@ class FinancialService:
         initial_revenue = scenario.initial_revenue
         initial_costs = scenario.initial_costs
         
+        # Apply optimization impacts if requested
+        if use_optimization and optimization_results:
+            initial_revenue *= optimization_results.get("revenue_impact", 1.0)
+            initial_costs *= optimization_results.get("cost_impact", 1.0)
+        
         for year in range(projection_years):
-            # Calculate revenue
+            # Calculate revenue with optimization impact
             current_revenue = initial_revenue * ((1 + scenario.annual_revenue_growth) ** year)
+            if use_optimization and optimization_results:
+                current_revenue *= optimization_results.get("revenue_impact", 1.0)
             
             # Calculate product-specific revenues
             product_revenues = {}
@@ -230,8 +318,10 @@ class FinancialService:
                 product_revenues[product.name] = product_revenue
                 total_product_revenue += product_revenue
             
-            # Calculate costs
+            # Calculate costs with optimization impact
             current_costs = initial_costs * ((1 + scenario.annual_cost_growth) ** year)
+            if use_optimization and optimization_results:
+                current_costs *= optimization_results.get("cost_impact", 1.0)
             
             # Calculate equipment costs
             total_depreciation = 0
@@ -260,6 +350,13 @@ class FinancialService:
                             total_depreciation += annual_depreciation
                         total_lease_costs += lease_costs["annual_lease_cost"]
                         total_tax_deductible_lease += lease_costs["tax_deductible_amount"]
+            
+            # Apply optimization impacts to equipment costs
+            if use_optimization and optimization_results:
+                equipment_impact = optimization_results.get("equipment_impact", 1.0)
+                total_depreciation *= equipment_impact
+                total_lease_costs *= equipment_impact
+                total_tax_deductible_lease *= equipment_impact
             
             # Calculate financial metrics
             ebitda = current_revenue - current_costs
@@ -432,4 +529,16 @@ def calculate_key_financial_metrics(scenario_id: int) -> Dict[str, Any]:
     """Wrapper function for key financial metrics calculation."""
     session = get_session()
     service = FinancialService(session)
-    return service.calculate_key_financial_metrics(scenario_id) 
+    return service.calculate_key_financial_metrics(scenario_id)
+
+def get_comprehensive_analysis(scenario_id: int) -> Dict[str, Any]:
+    """Wrapper function for comprehensive financial analysis."""
+    session = get_session()
+    service = FinancialService(session)
+    return service.get_comprehensive_analysis(scenario_id)
+
+def get_risk_adjusted_metrics(scenario_id: int) -> Dict[str, Any]:
+    """Wrapper function for risk-adjusted financial metrics."""
+    session = get_session()
+    service = FinancialService(session)
+    return service.get_risk_adjusted_metrics(scenario_id) 

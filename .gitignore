@@ -1,3 +1,4 @@
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
@@ -18,15 +19,29 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
-.env
-.venv
-env/
+
+# Virtual Environment
 venv/
+env/
 ENV/
-env.bak/
-venv.bak/
-.DS_Store
+
+# IDE
 .idea/
 .vscode/
+*.swp
+*.swo
+
+# Project specific
+data/output/*
+!data/output/.gitkeep
+*.log
+*.xlsx
+!data/templates/*.xlsx
+
+# Database
 *.db
-*.sqlite3 
+
+# Platform specific
+.DS_Store
+Thumbs.db
+.specstory/

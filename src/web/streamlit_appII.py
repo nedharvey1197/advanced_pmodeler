@@ -23,6 +23,26 @@ st.set_page_config(
 # Constants
 DB_PATH = "manufacturing_model.db"
 
+def get_db_connection():
+    """Create a database connection with proper error handling"""
+    try:
+        # Ensure the database directory exists
+        db_dir = os.path.dirname(DB_PATH)
+        if db_dir and not os.path.exists(db_dir):
+            os.makedirs(db_dir)
+            
+        # Create connection with proper timeout and isolation level
+        conn = sqlite3.connect(
+            DB_PATH,
+            timeout=30,  # 30 second timeout
+            isolation_level='IMMEDIATE'  # Better for concurrent access
+        )
+        return conn
+    except sqlite3.Error as e:
+        st.error(f"Database connection error: {e}")
+        raise
+        
+
 def init_sample_data():
     """Initialize database with sample data"""
     try:
@@ -2079,19 +2099,19 @@ def render_equipment_management(active_scenario_id):
             if name and len(name.strip()) > 0:
                 equipment_data = {
                     'scenario_id': active_scenario_id,
-                        'name': name.strip(),
+                    'name': name.strip(),
                     'cost': cost,
                     'useful_life': useful_life,
                     'max_capacity': max_capacity,
                     'maintenance_cost_pct': maintenance_cost_pct,
                     'availability_pct': availability_pct,
                     'purchase_year': purchase_year,
-                        'financing_type': financing_type,
+                    'financing_type': financing_type,
                     'is_leased': 1 if is_leased else 0,
-                        'lease_type': lease_type,
-                        'lease_rate': lease_rate,
-                        'debt_ratio': debt_ratio,
-                        'interest_rate': interest_rate
+                    'lease_type': lease_type,
+                    'lease_rate': lease_rate,
+                    'debt_ratio': debt_ratio,
+                    'interest_rate': interest_rate
                 }
                 print(f"Equipment data: {equipment_data}")
                 add_equipment(equipment_data)

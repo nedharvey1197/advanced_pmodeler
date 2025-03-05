@@ -4,6 +4,14 @@ import seaborn as sns
 import pandas as pd
 import numpy as np
 import matplotlib.backends.backend_pdf as pdf
+import os
+from typing import Dict, List, Any, Optional, Union, Tuple
+from datetime import datetime
+
+from ..models import (
+    Scenario, Equipment, Product, CostDriver, FinancialProjection,
+    get_session
+)
 
 def plot_equipment_utilization(scenario_id, year):
     """Plot equipment utilization for a specific scenario and year"""
@@ -475,3 +483,132 @@ def create_dashboard(scenario_id, output_file=None):
     pdf_pages.close()
     
     return {"status": "success", "file_path": output_file}
+
+def plot_scenario_comparison(scenario_ids: List[int], df_income: pd.DataFrame, df_ops: pd.DataFrame, scenario_map: Dict[int, Scenario]) -> List[plt.Figure]:
+    """
+    Create comparison plots for scenarios.
+    
+    Args:
+        scenario_ids: List of scenario IDs to compare
+        df_income: DataFrame with income statement data
+        df_ops: DataFrame with operations data
+        scenario_map: Dictionary mapping scenario IDs to Scenario objects
+        
+    Returns:
+        List of matplotlib figures
+    """
+    figures = []
+    
+    # Revenue Comparison
+    if not isinstance(df_income, dict) and not df_income.empty:
+        fig, ax = plt.subplots(figsize=(12, 8))
+        for scenario_id in scenario_ids:
+            if scenario_id not in scenario_map:
+                continue
+                
+            scenario_name = scenario_map[scenario_id].name
+            if (scenario_name, "revenue") in df_income.columns:
+                ax.plot(df_income.index, df_income[(scenario_name, "revenue")], 
+                        marker="o", linewidth=2, label=f"{scenario_name} - Revenue")
+        
+        ax.set_title("Revenue Comparison", fontsize=14)
+        ax.set_xlabel("Year", fontsize=12)
+        ax.set_ylabel("Revenue ($)", fontsize=12)
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+        plt.tight_layout()
+        figures.append(fig)
+        
+        # Net Income Comparison
+        fig, ax = plt.subplots(figsize=(12, 8))
+        for scenario_id in scenario_ids:
+            if scenario_id not in scenario_map:
+                continue
+                
+            scenario_name = scenario_map[scenario_id].name
+            if (scenario_name, "net_income") in df_income.columns:
+                ax.plot(df_income.index, df_income[(scenario_name, "net_income")], 
+                        marker="o", linewidth=2, label=f"{scenario_name} - Net Income")
+        
+        ax.set_title("Net Income Comparison", fontsize=14)
+        ax.set_xlabel("Year", fontsize=12)
+        ax.set_ylabel("Net Income ($)", fontsize=12)
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+        plt.tight_layout()
+        figures.append(fig)
+    
+    # Operations Comparison
+    if not isinstance(df_ops, dict) and not df_ops.empty:
+        fig, ax = plt.subplots(figsize=(12, 8))
+        for scenario_id in scenario_ids:
+            if scenario_id not in scenario_map:
+                continue
+                
+            scenario_name = scenario_map[scenario_id].name
+            if (scenario_name, "capacity_utilization") in df_ops.columns:
+                ax.plot(df_ops.index, df_ops[(scenario_name, "capacity_utilization")], 
+                        marker="o", linewidth=2, label=f"{scenario_name} - Capacity Utilization")
+        
+        ax.set_title("Capacity Utilization Comparison", fontsize=14)
+        ax.set_xlabel("Year", fontsize=12)
+        ax.set_ylabel("Utilization (%)", fontsize=12)
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+        plt.tight_layout()
+        figures.append(fig)
+    
+    return figures
+
+def plot_monte_carlo_results(simulation_results: Dict[str, Any], output_dir: str = "monte_carlo_results") -> List[plt.Figure]:
+    """
+    Create Monte Carlo simulation result plots.
+    
+    Args:
+        simulation_results: Dictionary containing simulation results
+        output_dir: Directory to save plot files
+        
+    Returns:
+        List of matplotlib figures
+    """
+    figures = []
+    
+    # Create output directory if it doesn't exist
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Plot key metrics distributions
+    for metric, values in simulation_results["key_metrics"].items():
+        if not values:
+            continue
+        
+        fig = plt.figure(figsize=(10, 6))
+        plt.hist(values, bins=50, edgecolor='black', alpha=0.7)
+        plt.title(f"Distribution of {metric.replace('_', ' ').title()}")
+        plt.xlabel(metric.replace('_', ' ').title())
+        plt.ylabel("Frequency")
+        
+        # Add vertical lines for key statistics
+        mean = np.mean(values)
+        median = np.median(values)
+        plt.axvline(mean, color='r', linestyle='dashed', linewidth=2, label=f'Mean: {mean:.2f}')
+        plt.axvline(median, color='g', linestyle='dashed', linewidth=2, label=f'Median: {median:.2f}')
+        
+        plt.legend()
+        plt.tight_layout()
+        figures.append(fig)
+    
+    # Plot input variable correlations
+    var_values = list(simulation_results["variable_samples"].values())
+    var_names = list(simulation_results["variable_samples"].keys())
+    
+    fig = plt.figure(figsize=(10, 8))
+    correlation_matrix = np.corrcoef(var_values)
+    plt.imshow(correlation_matrix, cmap='coolwarm', interpolation='nearest')
+    plt.colorbar()
+    plt.xticks(range(len(var_names)), var_names, rotation=45)
+    plt.yticks(range(len(var_names)), var_names)
+    plt.title("Correlation of Simulation Input Variables")
+    plt.tight_layout()
+    figures.append(fig)
+    
+    return figures

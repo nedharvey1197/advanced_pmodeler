@@ -1,14 +1,46 @@
+"""
+Advanced financial modeling service for sophisticated financial analysis.
+
+This module provides advanced financial modeling capabilities including:
+- Risk-adjusted cash flow analysis
+- Working capital management
+- Tax strategy optimization
+- Comprehensive financial analysis
+
+For detailed information about the integration with basic financial modeling,
+see financial_modeling_README.md
+"""
+
 import numpy as np
 import pandas as pd
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
+from datetime import datetime
+
+from ..models import (
+    Scenario, Equipment, Product, CostDriver, FinancialProjection,
+    get_session
+)
 
 class AdvancedFinancialModeling:
-    def __init__(self, scenario, session):
+    """
+    Advanced financial modeling class for sophisticated analysis.
+    
+    This class provides methods for advanced financial analysis including:
+    - Risk-adjusted cash flow analysis
+    - Working capital management
+    - Tax strategy optimization
+    - Comprehensive financial analysis
+    
+    This class is typically accessed through FinancialService.get_advanced_modeling()
+    """
+    
+    def __init__(self, scenario: Scenario, session):
         """
         Initialize advanced financial modeling
         
-        :param scenario: Scenario object
-        :param session: Database session
+        Args:
+            scenario: Scenario object
+            session: Database session
         """
         self.scenario = scenario
         self.session = session
@@ -29,12 +61,33 @@ class AdvancedFinancialModeling:
             'cash_conversion_cycle': 75,     # Total cash conversion cycle
         }
     
-    def calculate_advanced_cash_flow(self, financial_projections):
+    def update_risk_factors(self, new_factors: Dict[str, float]) -> None:
+        """
+        Update risk factors for analysis
+        
+        Args:
+            new_factors: Dictionary of new risk factor values
+        """
+        self.risk_factors.update(new_factors)
+    
+    def update_working_capital_params(self, new_params: Dict[str, int]) -> None:
+        """
+        Update working capital parameters
+        
+        Args:
+            new_params: Dictionary of new working capital parameters
+        """
+        self.working_capital_params.update(new_params)
+    
+    def calculate_advanced_cash_flow(self, financial_projections: List[FinancialProjection]) -> List[Dict[str, Any]]:
         """
         Generate sophisticated cash flow analysis
         
-        :param financial_projections: List of financial projection objects
-        :return: Enhanced cash flow analysis
+        Args:
+            financial_projections: List of financial projection objects
+            
+        Returns:
+            List of dictionaries containing enhanced cash flow analysis
         """
         cash_flow_analysis = []
         
@@ -179,12 +232,15 @@ class AdvancedFinancialModeling:
         
         return total_risk
     
-    def calculate_advanced_tax_strategy(self, financial_projections):
+    def calculate_advanced_tax_strategy(self, financial_projections: List[FinancialProjection]) -> List[Dict[str, Any]]:
         """
         Implement more sophisticated tax calculation methods
         
-        :param financial_projections: List of financial projection objects
-        :return: Tax optimization analysis
+        Args:
+            financial_projections: List of financial projection objects
+            
+        Returns:
+            List of dictionaries containing tax optimization analysis
         """
         tax_analysis = []
         
@@ -290,18 +346,22 @@ class AdvancedFinancialModeling:
         # Calculate effective tax rate
         return total_tax / (taxable_income if taxable_income > 0 else 1)
     
-    def generate_comprehensive_financial_analysis(self, financial_projections):
+    def generate_comprehensive_financial_analysis(self, financial_projections: List[FinancialProjection]) -> Dict[str, Any]:
         """
         Generate a comprehensive financial analysis
         
-        :param financial_projections: List of financial projection objects
-        :return: Comprehensive financial analysis dictionary
+        Args:
+            financial_projections: List of financial projection objects
+            
+        Returns:
+            Dictionary containing comprehensive financial analysis
         """
         return {
             'cash_flow_analysis': self.calculate_advanced_cash_flow(financial_projections),
             'tax_analysis': self.calculate_advanced_tax_strategy(financial_projections),
             'risk_factors': self.risk_factors,
-            'working_capital_params': self.working_capital_params
+            'working_capital_params': self.working_capital_params,
+            'analysis_timestamp': datetime.now().isoformat()
         }
 
 # Extension method for FinancialService

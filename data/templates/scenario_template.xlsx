@@ -1,0 +1,241 @@
+"""
+Excel template for manufacturing expansion financial model.
+
+This template contains:
+1. Input sheets for user data
+2. VBA code for the analysis button
+3. Data validation rules
+4. Formatting and instructions
+"""
+
+import openpyxl
+from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
+from openpyxl.worksheet.datavalidation import DataValidation
+from openpyxl.utils import get_column_letter
+import platform
+
+def create_template():
+    wb = openpyxl.Workbook()
+    
+    # Create Overview sheet
+    ws_overview = wb.active
+    ws_overview.title = "Overview"
+    
+    # Add instructions
+    ws_overview.append(["Manufacturing Expansion Financial Model"])
+    ws_overview.append(["Please fill out the following sheets and click 'Generate Analysis'"])
+    ws_overview.append([])
+    ws_overview.append(["Analysis Options"])
+    ws_overview.append(["Include Optimization", "Yes"])
+    ws_overview.append(["Include Monte Carlo Simulation", "No"])
+    ws_overview.append(["Include Sensitivity Analysis", "No"])
+    ws_overview.append([])
+    ws_overview.append(["Output Options"])
+    ws_overview.append(["Generate Charts", "Yes"])
+    ws_overview.append(["Generate PDF Report", "No"])
+    ws_overview.append(["Export to Google Sheets", "No"])
+    
+    # Create Scenario Inputs sheet
+    ws_scenario = wb.create_sheet("Scenario Inputs")
+    
+    # Add scenario inputs
+    ws_scenario.append(["Scenario Details"])
+    ws_scenario.append(["Name", ""])
+    ws_scenario.append(["Description", ""])
+    ws_scenario.append(["Base Case", "No"])
+    ws_scenario.append([])
+    
+    ws_scenario.append(["Financial Assumptions"])
+    ws_scenario.append(["Initial Revenue", ""])
+    ws_scenario.append(["Initial Costs", ""])
+    ws_scenario.append(["Annual Revenue Growth (%)", ""])
+    ws_scenario.append(["Annual Cost Growth (%)", ""])
+    ws_scenario.append(["Debt Ratio (%)", ""])
+    ws_scenario.append(["Interest Rate (%)", ""])
+    ws_scenario.append(["Tax Rate (%)", ""])
+    ws_scenario.append([])
+    
+    ws_scenario.append(["Optimization Parameters"])
+    ws_scenario.append(["Budget Constraint", ""])
+    ws_scenario.append(["Minimum ROI (%)", ""])
+    ws_scenario.append(["Maximum Debt Ratio (%)", ""])
+    ws_scenario.append([])
+    
+    ws_scenario.append(["Monte Carlo Parameters"])
+    ws_scenario.append(["Number of Iterations", "1000"])
+    ws_scenario.append(["Confidence Level (%)", "95"])
+    ws_scenario.append([])
+    
+    ws_scenario.append(["Sensitivity Parameters"])
+    ws_scenario.append(["Variable to Analyze", ""])
+    ws_scenario.append(["Min Value (%)", ""])
+    ws_scenario.append(["Max Value (%)", ""])
+    ws_scenario.append(["Step Size (%)", ""])
+    
+    # Create Equipment Inputs sheet
+    ws_equipment = wb.create_sheet("Equipment Inputs")
+    
+    # Add equipment headers
+    headers = ["Name", "Cost", "Useful Life", "Max Capacity", 
+              "Maintenance Cost (%)", "Availability (%)", 
+              "Purchase Year", "Leased", "Lease Rate (%)", "Lease Type",
+              "Optimization Priority", "Min Units", "Max Units"]
+    ws_equipment.append(headers)
+    
+    # Add data validation for Lease Type and Optimization Priority
+    lease_types = ["Operating", "Capital", ""]
+    dv_lease = DataValidation(type="list", formula1=f'"{",".join(lease_types)}"', allow_blank=True)
+    ws_equipment.add_data_validation(dv_lease)
+    dv_lease.add(f"{get_column_letter(10)}2:{get_column_letter(10)}1000")
+    
+    priority_types = ["High", "Medium", "Low", ""]
+    dv_priority = DataValidation(type="list", formula1=f'"{",".join(priority_types)}"', allow_blank=True)
+    ws_equipment.add_data_validation(dv_priority)
+    dv_priority.add(f"{get_column_letter(11)}2:{get_column_letter(11)}1000")
+    
+    # Create Product Inputs sheet
+    ws_product = wb.create_sheet("Product Inputs")
+    
+    # Add product headers
+    headers = ["Name", "Initial Units", "Unit Price", "Growth Rate (%)",
+              "Introduction Year", "Market Size", "Price Elasticity",
+              "Optimization Priority", "Min Production", "Max Production",
+              "Required Equipment"]
+    ws_product.append(headers)
+    
+    # Add data validation for Optimization Priority
+    dv_priority = DataValidation(type="list", formula1=f'"{",".join(priority_types)}"', allow_blank=True)
+    ws_product.add_data_validation(dv_priority)
+    dv_priority.add(f"{get_column_letter(8)}2:{get_column_letter(8)}1000")
+    
+    # Create Cost Drivers sheet
+    ws_costs = wb.create_sheet("Cost Drivers")
+    
+    # Add cost driver headers
+    headers = ["Name", "Type", "Base Cost", "Growth Rate (%)",
+              "Start Year", "End Year", "Optimization Priority"]
+    ws_costs.append(headers)
+    
+    # Add data validation for Type and Priority
+    cost_types = ["Fixed", "Variable", "Semi-Variable", ""]
+    dv_type = DataValidation(type="list", formula1=f'"{",".join(cost_types)}"', allow_blank=True)
+    ws_costs.add_data_validation(dv_type)
+    dv_type.add(f"{get_column_letter(2)}2:{get_column_letter(2)}1000")
+    
+    dv_priority = DataValidation(type="list", formula1=f'"{",".join(priority_types)}"', allow_blank=True)
+    ws_costs.add_data_validation(dv_priority)
+    dv_priority.add(f"{get_column_letter(7)}2:{get_column_letter(7)}1000")
+    
+    # Create Analysis Button sheet
+    ws_button = wb.create_sheet("Generate Analysis")
+    
+    # Add button
+    ws_button.append(["Click the button below to generate the analysis"])
+    ws_button.append([])
+    ws_button.append(["Generate Analysis"])
+    
+    # Apply formatting
+    for ws in [ws_overview, ws_scenario, ws_equipment, ws_product, ws_costs, ws_button]:
+        for row in ws.iter_rows():
+            for cell in row:
+                cell.font = Font(name="Calibri")
+                cell.alignment = Alignment(horizontal="left", vertical="center")
+                cell.border = Border(
+                    left=Side(style='thin'),
+                    right=Side(style='thin'),
+                    top=Side(style='thin'),
+                    bottom=Side(style='thin')
+                )
+    
+    # Format headers
+    for ws in [ws_scenario, ws_equipment, ws_product, ws_costs]:
+        for cell in ws[1]:
+            cell.font = Font(bold=True)
+            cell.fill = PatternFill(start_color="CCCCCC", end_color="CCCCCC", fill_type="solid")
+    
+    # Add VBA code
+    vba_code = """
+    Option Explicit
+    
+    #If Mac Then
+        Private Declare PtrSafe Function system Lib "libc.dylib" (ByVal command As String) As Long
+    #Else
+        Private Declare PtrSafe Function Shell Lib "kernel32" Alias "ShellExecuteA" ( _
+            ByVal hwnd As LongPtr, _
+            ByVal lpOperation As String, _
+            ByVal lpFile As String, _
+            ByVal lpParameters As String, _
+            ByVal lpDirectory As String, _
+            ByVal nShowCmd As Long) As LongPtr
+    #End If
+    
+    Sub GenerateAnalysis()
+        On Error GoTo ErrorHandler
+        
+        ' Get the current workbook path
+        Dim templatePath As String
+        templatePath = ThisWorkbook.Path & Application.PathSeparator & ThisWorkbook.Name
+        
+        ' Create output path
+        Dim outputPath As String
+        outputPath = ThisWorkbook.Path & Application.PathSeparator & "analysis_" & Format(Now(), "yyyymmdd_hhmmss") & ".xlsx"
+        
+        ' Get analysis options
+        Dim includeOptimization As Boolean
+        Dim includeMonteCarlo As Boolean
+        Dim includeSensitivity As Boolean
+        Dim generateCharts As Boolean
+        Dim generatePDF As Boolean
+        Dim exportToGoogle As Boolean
+        
+        includeOptimization = (ThisWorkbook.Sheets("Overview").Range("B5").Value = "Yes")
+        includeMonteCarlo = (ThisWorkbook.Sheets("Overview").Range("B6").Value = "Yes")
+        includeSensitivity = (ThisWorkbook.Sheets("Overview").Range("B7").Value = "Yes")
+        generateCharts = (ThisWorkbook.Sheets("Overview").Range("B10").Value = "Yes")
+        generatePDF = (ThisWorkbook.Sheets("Overview").Range("B11").Value = "Yes")
+        exportToGoogle = (ThisWorkbook.Sheets("Overview").Range("B12").Value = "Yes")
+        
+        ' Determine script path based on platform
+        Dim scriptPath As String
+        #If Mac Then
+            scriptPath = ThisWorkbook.Path & Application.PathSeparator & "scripts" & Application.PathSeparator & "run_analysis.command"
+        #Else
+            scriptPath = ThisWorkbook.Path & Application.PathSeparator & "scripts" & Application.PathSeparator & "run_analysis.bat"
+        #End If
+        
+        ' Build command with options
+        Dim cmd As String
+        cmd = """" & scriptPath & """ """ & templatePath & """"
+        If includeOptimization Then cmd = cmd & " --optimize"
+        If includeMonteCarlo Then cmd = cmd & " --monte-carlo"
+        If includeSensitivity Then cmd = cmd & " --sensitivity"
+        If generateCharts Then cmd = cmd & " --charts"
+        If generatePDF Then cmd = cmd & " --pdf"
+        If exportToGoogle Then cmd = cmd & " --google-sheets"
+        
+        ' Run the appropriate script
+        Dim result As Long
+        #If Mac Then
+            result = system(cmd)
+        #Else
+            result = Shell(0, "open", scriptPath, cmd, ThisWorkbook.Path, 1)
+        #End If
+        
+        If result = 0 Then
+            MsgBox "Analysis completed successfully!", vbInformation
+        Else
+            MsgBox "Error generating analysis. Please check the console for details.", vbCritical
+        End If
+        
+        Exit Sub
+        
+    ErrorHandler:
+        MsgBox "Error: " & Err.Description, vbCritical
+    End Sub
+    """
+    
+    # Save template with VBA
+    wb.save("templates/scenario_template.xlsx")
+
+if __name__ == "__main__":
+    create_template() 

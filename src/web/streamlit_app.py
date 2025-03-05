@@ -2078,7 +2078,7 @@ def render_financial_analysis(active_scenario_id):
         st.warning("No financial projections available. Click 'Calculate Projections' to generate them.")
         
     def render_capacity_planning(active_scenario_id):
-    st.title("Capacity Planning")
+        st.title("Capacity Planning")
     
     if active_scenario_id is None:
         st.info("Please select or create a scenario first.")

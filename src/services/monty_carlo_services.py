@@ -1,8 +1,23 @@
+"""
+Monte Carlo simulation service for the manufacturing expansion financial model.
+
+This module provides Monte Carlo simulation capabilities for analyzing uncertainty
+and risk in financial projections.
+"""
+
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import scipy.stats as stats
 import os
+from typing import Dict, List, Any, Optional
+from datetime import datetime
+
+from ..models import (
+    Scenario, Equipment, Product, CostDriver, FinancialProjection,
+    get_session
+)
+from .visualization_services import plot_monte_carlo_results
 
 class MonteCarloSimulation:
     def __init__(self, scenario_manager, scenario_id):
@@ -215,60 +230,18 @@ class MonteCarloSimulation:
                 "upper": np.percentile(values, 95)
             }
         
-        # Visualize results
-        self._plot_simulation_results(simulation_results)
+        # Create visualizations using visualization service
+        figures = plot_monte_carlo_results(simulation_results)
+        
+        # Save figures
+        for i, fig in enumerate(figures):
+            fig.savefig(f"monte_carlo_results/plot_{i}.png")
+            plt.close(fig)
         
         return {
             "raw_results": simulation_results,
             "analysis": analysis
         }
-    
-    def _plot_simulation_results(self, simulation_results):
-        """
-        Create visualizations of simulation results
-        
-        :param simulation_results: Dictionary of simulation results
-        """
-        # Create output directory if it doesn't exist
-        output_dir = "monte_carlo_results"
-        os.makedirs(output_dir, exist_ok=True)
-        
-        # Plot key metrics distributions
-        for metric, values in simulation_results["key_metrics"].items():
-            if not values:
-                continue
-            
-            plt.figure(figsize=(10, 6))
-            plt.hist(values, bins=50, edgecolor='black', alpha=0.7)
-            plt.title(f"Distribution of {metric.replace('_', ' ').title()}")
-            plt.xlabel(metric.replace('_', ' ').title())
-            plt.ylabel("Frequency")
-            
-            # Add vertical lines for key statistics
-            mean = np.mean(values)
-            median = np.median(values)
-            plt.axvline(mean, color='r', linestyle='dashed', linewidth=2, label=f'Mean: {mean:.2f}')
-            plt.axvline(median, color='g', linestyle='dashed', linewidth=2, label=f'Median: {median:.2f}')
-            
-            plt.legend()
-            plt.tight_layout()
-            plt.savefig(os.path.join(output_dir, f"{metric}_distribution.png"))
-            plt.close()
-        
-        # Plot input variable correlations
-        var_values = list(simulation_results["variable_samples"].values())
-        var_names = list(simulation_results["variable_samples"].keys())
-        
-        plt.figure(figsize=(10, 8))
-        correlation_matrix = np.corrcoef(var_values)
-        plt.imshow(correlation_matrix, cmap='coolwarm', interpolation='nearest')
-        plt.colorbar()
-        plt.xticks(range(len(var_names)), var_names, rotation=45)
-        plt.yticks(range(len(var_names)), var_names)
-        plt.title("Correlation of Simulation Input Variables")
-        plt.tight_layout()
-        plt.savefig(os.path.join(output_dir, "variable_correlations.png"))
-        plt.close()
 
 # Extension method for ScenarioManager to create Monte Carlo simulation
 def create_monte_carlo_simulation(self, scenario_id):
