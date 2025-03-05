@@ -11,6 +11,7 @@ from datetime import datetime
 from pathlib import Path
 import math
 import time
+import altair as alt
 
 # Set up page configuration - must be first Streamlit command
 st.set_page_config(
@@ -211,6 +212,7 @@ def init_sample_data():
 def init_database():
     """Initialize SQLite database with required tables if they don't exist"""
     print("\n=== Initializing database... ===")
+    conn = None
     try:
         # Create database directory if it doesn't exist
         db_dir = os.path.dirname(DB_PATH)
@@ -318,19 +320,19 @@ def init_database():
         ''')
         
         conn.commit()
-        conn.close()
-        
-        print("=== Database tables created successfully ===")
+        print("Database initialized successfully")
         return True, "Database initialized successfully"
         
-    except sqlite3.Error as e:
-        error_msg = f"Database error: {str(e)}"
-        print(error_msg)
-        return False, error_msg
     except Exception as e:
-        error_msg = f"Error initializing database: {str(e)}"
-        print(error_msg)
-        return False, error_msg
+        print(f"Error initializing database: {e}")
+        import traceback
+        print(f"Traceback: {traceback.format_exc()}")
+        st.error(f"Error initializing database: {e}")
+        return False, f"Error initializing database: {e}"
+        
+    finally:
+        if conn:
+            conn.close()
 
 def ensure_database():
     """Ensure database exists with tables and sample data"""
@@ -410,7 +412,7 @@ def get_scenarios():
         print("DEBUG: DataFrame dtypes:", df.dtypes)
         
         return df
-        
+
     except Exception as e:
         print(f"\nERROR in get_scenarios: {str(e)}")
         print(f"Error type: {type(e)}")
@@ -591,16 +593,16 @@ def get_cost_drivers(product_id, equipment_id=None):
         if equipment_id:
             query += " AND equipment_id = ?"
             params.append(equipment_id)
-        
-        # Get the data
-        cursor.execute(query, params)
-        data = cursor.fetchall()
-        
-        # Create DataFrame
-        df = pd.DataFrame(data, columns=columns) if data else pd.DataFrame(columns=columns)
-        
-        conn.close()
-        return df
+            
+            # Get the data
+            cursor.execute(query, params)
+            data = cursor.fetchall()
+            
+            # Create DataFrame
+            df = pd.DataFrame(data, columns=columns) if data else pd.DataFrame(columns=columns)
+            
+            conn.close()
+            return df
     except Exception as e:
         st.error(f"Error getting cost drivers: {e}")
         return pd.DataFrame(columns=[
@@ -721,7 +723,7 @@ def add_equipment(data):
             data['availability_pct'],
             data['purchase_year'],
             data['financing_type'],
-            data['is_leased'],
+            1 if data['is_leased'] else 0,
             data['lease_type'],
             data['lease_rate'],
             data['debt_ratio'],
@@ -742,59 +744,77 @@ def add_equipment(data):
         raise
 
 def add_product(data):
+    print(f"\n=== Adding product: {data['name']} ===")
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
-    cursor.execute('''
-    INSERT INTO product (
-        scenario_id, name, initial_units, unit_price, growth_rate,
-        introduction_year, market_size, price_elasticity
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    ''', (
-        data['scenario_id'],
-        data['name'],
-        data['initial_units'],
-        data['unit_price'],
-        data['growth_rate'],
-        data['introduction_year'],
-        data.get('market_size', 0),
-        data.get('price_elasticity', 0)
-    ))
-    
-    product_id = cursor.lastrowid
-    conn.commit()
-    conn.close()
-    return product_id
+    try:
+        cursor.execute('''
+        INSERT INTO product (
+                scenario_id, name, initial_units, unit_price,
+                growth_rate, introduction_year, market_size, price_elasticity
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+            data['scenario_id'],
+            data['name'],
+            data['initial_units'],
+            data['unit_price'],
+            data['growth_rate'],
+            data['introduction_year'],
+            data['market_size'],
+            data['price_elasticity']
+        ))
+        
+        product_id = cursor.lastrowid
+        print(f"Successfully added product with ID: {product_id}")
+        conn.commit()
+        conn.close()
+        return product_id
+            
+    except Exception as e:
+        print(f"Error adding product: {str(e)}")
+        import traceback
+        print(f"Traceback: {traceback.format_exc()}")
+        conn.close()
+        raise
 
 def add_cost_driver(data):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
-    cursor.execute('''
-    INSERT INTO cost_driver (
-        product_id, equipment_id, cost_per_hour, hours_per_unit,
-        materials_cost_per_unit, machinist_labor_cost_per_hour, machinist_hours_per_unit,
-        design_labor_cost_per_hour, design_hours_per_unit,
-        supervision_cost_per_hour, supervision_hours_per_unit
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ''', (
-        data['product_id'],
-        data['equipment_id'],
-        data['cost_per_hour'],
-        data['hours_per_unit'],
-        data['materials_cost_per_unit'],
-        data['machinist_labor_cost_per_hour'],
-        data['machinist_hours_per_unit'],
-        data['design_labor_cost_per_hour'],
-        data['design_hours_per_unit'],
-        data['supervision_cost_per_hour'],
-        data['supervision_hours_per_unit']
-    ))
-    
-    cost_driver_id = cursor.lastrowid
-    conn.commit()
-    conn.close()
-    return cost_driver_id
+    try:
+        cursor.execute('''
+        INSERT INTO cost_driver (
+            product_id, equipment_id, cost_per_hour, hours_per_unit,
+            materials_cost_per_unit, machinist_labor_cost_per_hour, machinist_hours_per_unit,
+            design_labor_cost_per_hour, design_hours_per_unit,
+            supervision_cost_per_hour, supervision_hours_per_unit
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            data['product_id'],
+            data['equipment_id'],
+            data['cost_per_hour'],
+            data['hours_per_unit'],
+            data['materials_cost_per_unit'],
+            data['machinist_labor_cost_per_hour'],
+            data['machinist_hours_per_unit'],
+            data['design_labor_cost_per_hour'],
+            data['design_hours_per_unit'],
+            data['supervision_cost_per_hour'],
+            data['supervision_hours_per_unit']
+        ))
+        
+        cost_driver_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        return cost_driver_id
+        
+    except Exception as e:
+        print(f"Error adding cost driver: {str(e)}")
+        import traceback
+        print(f"Traceback: {traceback.format_exc()}")
+        conn.close()
+        raise
 
 def delete_equipment(equipment_id):
     conn = sqlite3.connect(DB_PATH)
@@ -1190,6 +1210,9 @@ def generate_swot_analysis(scenario_id):
 def render_sidebar():
     """Render the sidebar navigation"""
     with st.sidebar:
+        # Add some padding at the top
+        st.markdown("<div style='padding-top: 2rem;'></div>", unsafe_allow_html=True)
+        
         st.subheader("Navigation")
         
         # Get available scenarios
@@ -1204,7 +1227,16 @@ def render_sidebar():
                 else:
                     st.session_state.active_scenario_id = scenarios_df.iloc[0]['id']
             
-            # Create scenario selection
+            # Create scenario selection with custom styling
+            st.markdown("""
+                <style>
+                .stSelectbox {
+                    margin-bottom: 1rem;
+                    z-index: 1000;
+                }
+                </style>
+            """, unsafe_allow_html=True)
+            
             scenario_names = scenarios_df['name'].tolist()
             current_scenario = scenarios_df[scenarios_df['id'] == st.session_state.active_scenario_id].iloc[0]['name']
             selected_scenario = st.selectbox(
@@ -1219,9 +1251,13 @@ def render_sidebar():
             if selected_scenario != current_scenario:
                 new_scenario_id = scenarios_df[scenarios_df['name'] == selected_scenario].iloc[0]['id']
                 st.session_state.active_scenario_id = new_scenario_id
+                st.rerun()
         else:
             st.warning("No scenarios found. Please create a scenario first.")
             st.session_state.active_scenario_id = None
+        
+        # Add spacing between sections
+        st.markdown("<div style='padding: 1rem 0;'></div>", unsafe_allow_html=True)
         
         # Navigation options
         st.write("Pages")
@@ -1236,16 +1272,18 @@ def render_sidebar():
         if 'current_page' not in st.session_state:
             st.session_state.current_page = "Dashboard"
         
-        # Create navigation buttons
+        # Create navigation buttons with spacing
         for page, (icon, tooltip) in pages.items():
             if st.button(f"{icon} {page}", key=f"nav_{page}", help=tooltip):
                 st.session_state.current_page = page
                 if page != "Model Configuration":
                     st.session_state.config_page = None
                 st.rerun()
+            st.markdown("<div style='padding: 0.5rem 0;'></div>", unsafe_allow_html=True)
         
         # Sub-menu for Model Configuration
         if st.session_state.current_page == "Model Configuration":
+            st.markdown("<div style='padding: 1rem 0;'></div>", unsafe_allow_html=True)
             st.write("Model Configuration")
             config_pages = {
                 "Scenarios": ("📋", "Create and manage scenarios"),
@@ -1257,40 +1295,54 @@ def render_sidebar():
             if 'config_page' not in st.session_state:
                 st.session_state.config_page = "Scenarios"
             
-            # Create sub-menu buttons
+            # Create sub-menu buttons with spacing
             for page, (icon, tooltip) in config_pages.items():
                 if st.button(f"{icon} {page}", key=f"config_{page}", help=tooltip):
                     st.session_state.config_page = page
                     st.rerun()
+                st.markdown("<div style='padding: 0.5rem 0;'></div>", unsafe_allow_html=True)
         
         return st.session_state.active_scenario_id
 
-def render_dashboard(active_scenario_id):
-    """Render the dashboard page"""
-    # Get scenario info
-    scenario = get_scenario(active_scenario_id)
-    if scenario is None:
-        st.error("Could not load scenario data")
-        return
-        
-    # Header with Calculate button
-    col1, col2 = st.columns([6, 1])
-    with col1:
-        st.header(f"Dashboard - {scenario['name']}")
-    with col2:
-        if st.button("🔄 Calculate", help="Recalculate financial projections"):
-            calculate_financial_projections(active_scenario_id)
-            st.rerun()
+def render_dashboard(scenario_id):
+    st.title("Dashboard")
     
-    # Get data for dashboard
-    products_df = get_products(active_scenario_id)
-    equipment_df = get_equipment(active_scenario_id)
-    financial_projections = get_financial_projections(active_scenario_id)
+    # Get scenario data
+    scenario = get_scenario(scenario_id)
+    if not scenario:
+        st.error("Scenario not found")
+        return
+    
+    # Asset Inventory Section
+    st.header("Asset Inventory")
+    equipment_df = get_equipment(scenario_id)
+    
+    if not equipment_df.empty:
+        # Create display DataFrame with formatted columns
+        display_df = equipment_df[['name', 'cost', 'useful_life', 'maintenance_cost_pct', 'financing_type']].copy()
+        
+        # Format currency columns
+        display_df['cost'] = display_df['cost'].apply(lambda x: f"${x:,.2f}")
+        
+        # Calculate and format maintenance cost
+        display_df['annual_maintenance'] = equipment_df.apply(
+            lambda row: f"${row['cost'] * row['maintenance_cost_pct']/100:,.2f}", axis=1
+        )
+        
+        # Drop the maintenance_cost_pct column as we now have the calculated value
+        display_df = display_df.drop('maintenance_cost_pct', axis=1)
+        
+        # Rename columns for display
+        display_df.columns = ['Equipment', 'Purchase Price', 'Useful Life (Years)', 'Financing', 'Annual Maintenance']
+        
+        st.dataframe(display_df, hide_index=True)
+    else:
+        st.info("No equipment data available")
     
     # Key metrics in columns
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.metric("Products", len(products_df) if isinstance(products_df, pd.DataFrame) else 0)
+        st.metric("Products", len(get_products(scenario_id)) if isinstance(get_products(scenario_id), pd.DataFrame) else 0)
     with col2:
         st.metric("Equipment", len(equipment_df) if isinstance(equipment_df, pd.DataFrame) else 0)
     with col3:
@@ -1298,52 +1350,64 @@ def render_dashboard(active_scenario_id):
         growth = float(growth) if growth is not None else 0
         st.metric("Revenue Growth", f"{growth:.1%}")
     with col4:
-        if isinstance(financial_projections, pd.DataFrame) and not financial_projections.empty:
-            latest_year = financial_projections['year'].max()
-            latest_projection = financial_projections[financial_projections['year'] == latest_year]
+        if isinstance(get_financial_projections(scenario_id), pd.DataFrame) and not get_financial_projections(scenario_id).empty:
+            latest_year = get_financial_projections(scenario_id)['year'].max()
+            latest_projection = get_financial_projections(scenario_id)[get_financial_projections(scenario_id)['year'] == latest_year]
             if not latest_projection.empty:
                 utilization = latest_projection.iloc[0].get('capacity_utilization', 0)
                 utilization = float(utilization) if utilization is not None else 0
                 st.metric("Latest Utilization", f"{utilization:.1f}%")
     
     # Financial overview
-    if isinstance(financial_projections, pd.DataFrame) and not financial_projections.empty:
+    if isinstance(get_financial_projections(scenario_id), pd.DataFrame) and not get_financial_projections(scenario_id).empty:
         st.subheader("Financial Overview")
-        
+    
         # Create two columns for charts
         col1, col2 = st.columns(2)
-        
-        with col1:
-            # Revenue and Income chart
-            plt.figure(figsize=(10, 5))
-            plt.plot(financial_projections['year'], financial_projections['revenue'], 'b-', marker='o', label='Revenue')
-            plt.plot(financial_projections['year'], financial_projections['net_income'], 'g-', marker='s', label='Net Income')
-            plt.title("Revenue and Net Income Projection")
-            plt.xlabel("Year")
-            plt.ylabel("Amount ($)")
-            plt.legend()
-            plt.grid(True, alpha=0.3)
-            st.pyplot(plt)
-            plt.close()
-        
-        with col2:
-            # Capacity Utilization chart
-            plt.figure(figsize=(10, 5))
-            plt.plot(financial_projections['year'], financial_projections['capacity_utilization'], 'r-', marker='o')
-            plt.axhline(y=85, color='r', linestyle='--', alpha=0.5, label="Bottleneck Threshold (85%)")
-            plt.axhline(y=50, color='g', linestyle='--', alpha=0.5, label="Underutilization Threshold (50%)")
-            plt.title("Capacity Utilization Trend")
-            plt.xlabel("Year")
-            plt.ylabel("Utilization (%)")
-            plt.ylim(0, 105)
-            plt.legend()
-            plt.grid(True, alpha=0.3)
-            st.pyplot(plt)
-            plt.close()
+    
+    with col1:
+            # Revenue and Profit Chart
+            chart_data = pd.DataFrame({
+                'Year': get_financial_projections(scenario_id)['year'],
+                'Revenue': get_financial_projections(scenario_id)['revenue'],
+                'EBITDA': get_financial_projections(scenario_id)['ebitda'],
+                'Net Income': get_financial_projections(scenario_id)['net_income']
+            })
+            
+            chart = alt.Chart(chart_data.melt('Year', var_name='Metric', value_name='Amount')).mark_line(point=True).encode(
+                x='Year:O',
+                y=alt.Y('Amount:Q', axis=alt.Axis(format='$~s')),
+                color='Metric:N',
+                tooltip=['Year:O', alt.Tooltip('Amount:Q', format='$,.0f'), 'Metric:N']
+            ).properties(
+                title='Revenue and Profit Trends'
+            )
+            
+            st.altair_chart(chart, use_container_width=True)
+    
+    with col2:
+            # Margin Chart
+            margin_data = pd.DataFrame({
+                'Year': get_financial_projections(scenario_id)['year'],
+                'Gross Margin': (get_financial_projections(scenario_id)['gross_profit'] / get_financial_projections(scenario_id)['revenue'] * 100),
+                'EBITDA Margin': (get_financial_projections(scenario_id)['ebitda'] / get_financial_projections(scenario_id)['revenue'] * 100),
+                'Net Margin': (get_financial_projections(scenario_id)['net_income'] / get_financial_projections(scenario_id)['revenue'] * 100)
+            })
+            
+            margin_chart = alt.Chart(margin_data.melt('Year', var_name='Metric', value_name='Percentage')).mark_line(point=True).encode(
+                x='Year:O',
+                y=alt.Y('Percentage:Q', axis=alt.Axis(format='%')),
+                color='Metric:N',
+                tooltip=['Year:O', alt.Tooltip('Percentage:Q', format='.1%'), 'Metric:N']
+            ).properties(
+                title='Margin Analysis'
+            )
+            
+            st.altair_chart(margin_chart, use_container_width=True)
     
     # SWOT Analysis
     st.subheader("SWOT Analysis")
-    swot = generate_swot_analysis(active_scenario_id)
+    swot = generate_swot_analysis(scenario_id)
     
     if swot and isinstance(swot, dict):
         col1, col2 = st.columns(2)
@@ -1368,13 +1432,23 @@ def render_dashboard(active_scenario_id):
     # Equipment and Product tables
     st.subheader("Asset Inventory")
     if isinstance(equipment_df, pd.DataFrame) and not equipment_df.empty:
-        st.dataframe(equipment_df[['name', 'purchase_price', 'useful_life', 'maintenance_cost', 'financing_method']], hide_index=True)
+        st.dataframe(equipment_df[['name', 'cost', 'useful_life', 'maintenance_cost_pct', 'financing_type']], hide_index=True)
     else:
         st.info("No equipment added yet")
     
     st.subheader("Product Portfolio")
-    if isinstance(products_df, pd.DataFrame) and not products_df.empty:
-        st.dataframe(products_df[['name', 'description', 'unit_price', 'target_margin']], hide_index=True)
+    if isinstance(get_products(scenario_id), pd.DataFrame) and not get_products(scenario_id).empty:
+        display_df = get_products(scenario_id)[['name', 'unit_price', 'initial_units', 'growth_rate']].copy()
+        
+        # Format the columns
+        display_df['unit_price'] = display_df['unit_price'].apply(lambda x: f"${x:,.2f}")
+        display_df['initial_units'] = display_df['initial_units'].apply(lambda x: f"{x:,.0f}")
+        display_df['growth_rate'] = display_df['growth_rate'].apply(lambda x: f"{x:.1%}")
+        
+        # Rename columns for display
+        display_df.columns = ['Product', 'Unit Price', 'Initial Units', 'Annual Growth']
+        
+        st.dataframe(display_df, hide_index=True)
     else:
         st.info("No products added yet")
 
@@ -1416,33 +1490,38 @@ def render_scenario_management():
         # Show the dataframe without index
         st.dataframe(display_df, use_container_width=True, hide_index=True)
         
-        # Select active scenario
+        # Create scenario selection with proper state management
+        st.subheader("Scenario Selection")
         scenario_options = [(row['id'], row['name']) for _, row in scenarios_df.iterrows()]
-        selected_id, selected_name = scenario_options[0]  # Default to first scenario
+        
+        # Get current selection
+        current_id = st.session_state.get('active_scenario_id')
+        current_index = next((i for i, (id, _) in enumerate(scenario_options) if id == current_id), 0)
         
         # Create selection box with ID and name
         selected_option = st.selectbox(
             "Select active scenario",
             options=[f"{id} - {name}" for id, name in scenario_options],
-            index=next((i for i, (id, _) in enumerate(scenario_options) if id == active_id), 0)
+            index=current_index,
+            key="scenario_management_selector"
         )
         
         # Extract ID from selection
         selected_id = int(selected_option.split(" - ")[0])
         
-        col1, col2 = st.columns([1, 4])
-        with col1:
-            if st.button("Set as Active"):
-                print(f"Setting active scenario to ID: {selected_id}")
-                st.session_state.active_scenario_id = selected_id
-                st.rerun()
-        
-        # Option to clone scenario
-        with col2:
-            if st.button("Clone Selected"):
-                print(f"Preparing to clone scenario ID: {selected_id}")
-                st.session_state.clone_scenario = selected_id
-                st.info("Fill in the form below to clone the scenario")
+        # Only update if selection has changed
+        if selected_id != current_id:
+            col1, col2 = st.columns([1, 4])
+            with col1:
+                if st.button("Set as Active"):
+                    st.session_state.active_scenario_id = selected_id
+                    st.rerun()
+            
+            # Option to clone scenario
+            with col2:
+                if st.button("Clone Selected"):
+                    st.session_state.clone_scenario = selected_id
+                    st.info("Fill in the form below to clone the scenario")
     
     # Create new scenario form
     st.subheader("Create New Scenario")
@@ -1539,12 +1618,12 @@ def render_scenario_management():
             }
             
             try:
-                # Create the scenario
+            # Create the scenario
                 print("Creating scenario with data:", scenario_data)
                 scenario_id = create_scenario(scenario_data)
                 print(f"Created scenario with ID: {scenario_id}")
-                
-                # Clone equipment and products if needed
+            
+            # Clone equipment and products if needed
                 if 'clone_scenario' in st.session_state and st.session_state.clone_scenario:
                     clone_id = st.session_state.clone_scenario
                     print(f"Cloning data from scenario {clone_id} to new scenario {scenario_id}")
@@ -1561,36 +1640,36 @@ def render_scenario_management():
                             'maintenance_cost_pct': eq['maintenance_cost_pct'],
                             'availability_pct': eq['availability_pct'],
                             'purchase_year': eq['purchase_year'],
-                            'financing_type': eq['financing_type'],
-                            'is_leased': eq['is_leased'],
-                            'lease_type': eq['lease_type'],
-                            'lease_rate': eq['lease_rate'],
-                            'debt_ratio': eq['debt_ratio'],
-                            'interest_rate': eq['interest_rate']
+                                'financing_type': eq['financing_type'],
+                                'is_leased': eq['is_leased'],
+                                'lease_type': eq['lease_type'],
+                                'lease_rate': eq['lease_rate'],
+                                'debt_ratio': eq['debt_ratio'],
+                                'interest_rate': eq['interest_rate']
                         }
                         print(f"Adding equipment: {equipment_data['name']}")
                         add_equipment(equipment_data)
-                    
-                    # Clone products
-                    products_df = get_products(clone_id)
-                    for _, prod in products_df.iterrows():
-                        product_data = {
-                            'scenario_id': scenario_id,
-                            'name': prod['name'],
-                            'initial_units': prod['initial_units'],
-                            'unit_price': prod['unit_price'],
-                            'growth_rate': prod['growth_rate'],
-                            'introduction_year': prod['introduction_year'],
-                            'market_size': prod['market_size'],
-                            'price_elasticity': prod['price_elasticity']
-                        }
-                        print(f"Adding product: {product_data['name']}")
-                        add_product(product_data)
-                    
-                    # Clear clone flag
-                    print("Clearing clone flag")
-                    st.session_state.clone_scenario = None
                 
+                # Clone products
+                products_df = get_products(clone_id)
+                for _, prod in products_df.iterrows():
+                    product_data = {
+                        'scenario_id': scenario_id,
+                        'name': prod['name'],
+                        'initial_units': prod['initial_units'],
+                        'unit_price': prod['unit_price'],
+                        'growth_rate': prod['growth_rate'],
+                        'introduction_year': prod['introduction_year'],
+                        'market_size': prod['market_size'],
+                        'price_elasticity': prod['price_elasticity']
+                    }
+                    print(f"Adding product: {product_data['name']}")
+                    add_product(product_data)
+                
+                # Clear clone flag
+                print("Clearing clone flag")
+                st.session_state.clone_scenario = None
+            
                 # Set as active scenario and navigate to dashboard
                 print(f"Setting new scenario {scenario_id} as active")
                 st.session_state.active_scenario_id = scenario_id
@@ -1604,17 +1683,285 @@ def render_scenario_management():
                 st.error(f"Error creating scenario: {str(e)}")
                 return
 
+def get_standard_equipment():
+    """Return a list of standard equipment with their default parameters"""
+    return [
+        {
+            'name': 'Lapping Machine - 24" Diameter',
+            'description': 'Precision flat lapping and polishing system with digital control',
+            'purchase_price': 85000,
+            'installation_cost': 8500,
+            'useful_life': 15,
+            'maintenance_cost': 4250,
+            'power_consumption': 5.5,
+            'availability_pct': 95
+        },
+        {
+            'name': 'Large Ultrasonic Cleaning Tank',
+            'description': 'Industrial ultrasonic cleaner with filtration and heating',
+            'purchase_price': 45000,
+            'installation_cost': 4500,
+            'useful_life': 12,
+            'maintenance_cost': 2250,
+            'power_consumption': 3.8,
+            'availability_pct': 98
+        },
+        {
+            'name': 'Vacuum Furnace - 48" Chamber',
+            'description': 'High-temperature vacuum furnace with programmable controls',
+            'purchase_price': 275000,
+            'installation_cost': 27500,
+            'useful_life': 20,
+            'maintenance_cost': 13750,
+            'power_consumption': 45,
+            'availability_pct': 92
+        },
+        {
+            'name': 'Laser Welder with Safety Enclosure',
+            'description': 'Fiber laser welding system with class 1 safety enclosure',
+            'purchase_price': 195000,
+            'installation_cost': 19500,
+            'useful_life': 10,
+            'maintenance_cost': 9750,
+            'power_consumption': 12,
+            'availability_pct': 95
+        },
+        {
+            'name': 'Sinker EDM',
+            'description': 'CNC sinker EDM with automatic tool changer',
+            'purchase_price': 165000,
+            'installation_cost': 16500,
+            'useful_life': 15,
+            'maintenance_cost': 8250,
+            'power_consumption': 15,
+            'availability_pct': 94
+        },
+        {
+            'name': 'Wire EDM',
+            'description': 'CNC wire EDM with auto-threading',
+            'purchase_price': 185000,
+            'installation_cost': 18500,
+            'useful_life': 15,
+            'maintenance_cost': 9250,
+            'power_consumption': 12,
+            'availability_pct': 93
+        },
+        {
+            'name': 'Surface Grinder - 24x48',
+            'description': 'Precision surface grinder with digital readout',
+            'purchase_price': 95000,
+            'installation_cost': 9500,
+            'useful_life': 20,
+            'maintenance_cost': 4750,
+            'power_consumption': 7.5,
+            'availability_pct': 96
+        },
+        {
+            'name': 'CNC Mill - 4 Axis',
+            'description': 'Vertical machining center with 4th axis rotary',
+            'purchase_price': 225000,
+            'installation_cost': 22500,
+            'useful_life': 12,
+            'maintenance_cost': 11250,
+            'power_consumption': 20,
+            'availability_pct': 94
+        },
+        {
+            'name': 'CNC Lathe with Live Tooling',
+            'description': 'CNC turning center with live tooling capability',
+            'purchase_price': 245000,
+            'installation_cost': 24500,
+            'useful_life': 12,
+            'maintenance_cost': 12250,
+            'power_consumption': 18,
+            'availability_pct': 94
+        },
+        {
+            'name': 'CMM Machine',
+            'description': 'Coordinate measuring machine with scanning probe',
+            'purchase_price': 175000,
+            'installation_cost': 17500,
+            'useful_life': 15,
+            'maintenance_cost': 8750,
+            'power_consumption': 3.5,
+            'availability_pct': 97
+        },
+        {
+            'name': 'Heat Treatment Oven',
+            'description': 'Programmable heat treatment oven with data logging',
+            'purchase_price': 85000,
+            'installation_cost': 8500,
+            'useful_life': 18,
+            'maintenance_cost': 4250,
+            'power_consumption': 25,
+            'availability_pct': 96
+        },
+        {
+            'name': 'Optical Comparator',
+            'description': 'Digital optical comparator with DRO and software',
+            'purchase_price': 45000,
+            'installation_cost': 4500,
+            'useful_life': 15,
+            'maintenance_cost': 2250,
+            'power_consumption': 1.5,
+            'availability_pct': 98
+        },
+        {
+            'name': 'Surface Finish Tester',
+            'description': 'Portable surface roughness tester with printer',
+            'purchase_price': 15000,
+            'installation_cost': 1500,
+            'useful_life': 8,
+            'maintenance_cost': 750,
+            'power_consumption': 0.2,
+            'availability_pct': 99
+        },
+        {
+            'name': 'Blast Cabinet',
+            'description': 'Industrial blast cabinet with dust collection',
+            'purchase_price': 12000,
+            'installation_cost': 1200,
+            'useful_life': 15,
+            'maintenance_cost': 600,
+            'power_consumption': 2.5,
+            'availability_pct': 98
+        },
+        {
+            'name': 'Tool Presetter',
+            'description': 'CNC tool presetting and measuring system',
+            'purchase_price': 65000,
+            'installation_cost': 6500,
+            'useful_life': 12,
+            'maintenance_cost': 3250,
+            'power_consumption': 1.2,
+            'availability_pct': 99
+        }
+    ]
+
+def get_standard_products():
+    """Return a list of standard products with their default parameters"""
+    return [
+        {
+            'name': 'Precision Ground Shafts',
+            'description': 'Custom ground shafts with tight tolerances',
+            'unit_price': 750,
+            'target_margin': 0.35,
+            'growth_rate': 0.05,
+            'introduction_year': 0
+        },
+        {
+            'name': 'EDM Cut Components',
+            'description': 'Complex geometry parts made with EDM',
+            'unit_price': 1200,
+            'target_margin': 0.40,
+            'growth_rate': 0.06,
+            'introduction_year': 0
+        },
+        {
+            'name': 'Lapped Seal Faces',
+            'description': 'Ultra-flat seal faces for industrial applications',
+            'unit_price': 850,
+            'target_margin': 0.38,
+            'growth_rate': 0.04,
+            'introduction_year': 0
+        },
+        {
+            'name': 'Precision Machined Housings',
+            'description': 'Multi-axis machined housings with tight tolerances',
+            'unit_price': 2500,
+            'target_margin': 0.32,
+            'growth_rate': 0.05,
+            'introduction_year': 0
+        },
+        {
+            'name': 'Custom Vacuum Components',
+            'description': 'Specialty vacuum chamber components',
+            'unit_price': 3500,
+            'target_margin': 0.35,
+            'growth_rate': 0.07,
+            'introduction_year': 0
+        },
+        {
+            'name': 'Laser Welded Assemblies',
+            'description': 'Precision assemblies with laser welded joints',
+            'unit_price': 1800,
+            'target_margin': 0.33,
+            'growth_rate': 0.06,
+            'introduction_year': 0
+        },
+        {
+            'name': 'Heat Treated Tool Components',
+            'description': 'Precision tools with specific heat treatment',
+            'unit_price': 950,
+            'target_margin': 0.36,
+            'growth_rate': 0.04,
+            'introduction_year': 0
+        },
+        {
+            'name': 'Ground Gauge Blocks',
+            'description': 'High-precision gauge blocks with certification',
+            'unit_price': 450,
+            'target_margin': 0.42,
+            'growth_rate': 0.03,
+            'introduction_year': 0
+        },
+        {
+            'name': 'Custom Mold Components',
+            'description': 'Precision components for injection molds',
+            'unit_price': 4500,
+            'target_margin': 0.38,
+            'growth_rate': 0.06,
+            'introduction_year': 0
+        },
+        {
+            'name': 'Aerospace Brackets',
+            'description': 'Precision brackets for aerospace applications',
+            'unit_price': 1650,
+            'target_margin': 0.35,
+            'growth_rate': 0.08,
+            'introduction_year': 0
+        },
+        {
+            'name': 'Medical Device Components',
+            'description': 'High-precision parts for medical devices',
+            'unit_price': 2800,
+            'target_margin': 0.40,
+            'growth_rate': 0.09,
+            'introduction_year': 0
+        },
+        {
+            'name': 'Optical Mount Components',
+            'description': 'Precision components for optical systems',
+            'unit_price': 1950,
+            'target_margin': 0.37,
+            'growth_rate': 0.06,
+            'introduction_year': 0
+        }
+    ]
+
 def render_equipment_management(active_scenario_id):
-    """Render the equipment management page"""
-    st.header("Equipment Management")
+    st.title("Equipment Management")
     st.write(f"Managing equipment for scenario: {get_scenario(active_scenario_id)['name']}")
     
     # Get existing equipment
     equipment_df = get_equipment(active_scenario_id)
+    print(f"Found {len(equipment_df)} equipment items")
     
-    # Display existing equipment in a table with radio selection
-    if not equipment_df.empty:
-        st.subheader("Asset Inventory")  # Changed from Equipment Inventory
+    if isinstance(equipment_df, pd.DataFrame) and not equipment_df.empty:
+        st.subheader("Current Equipment")
+        
+        # Create display DataFrame with formatted columns
+        display_df = equipment_df[['name', 'cost', 'useful_life', 'max_capacity', 'availability_pct', 'purchase_year', 'financing_type', 'lease_type', 'lease_rate']].copy()
+        
+        # Format currency columns
+        display_df['cost'] = display_df['cost'].apply(lambda x: f"${x:,.2f}")
+        display_df['lease_rate'] = display_df['lease_rate'].apply(lambda x: f"${x:,.2f}" if x > 0 else "-")
+        display_df['availability_pct'] = display_df['availability_pct'].apply(lambda x: f"{x:.1%}")
+        
+        # Rename columns for display
+        display_df.columns = ['Equipment', 'Purchase Price', 'Useful Life (Years)', 'Max Capacity', 'Availability', 'Purchase Year', 'Financing', 'Lease Type', 'Lease Rate']
+        
+        st.dataframe(display_df, hide_index=True)
         
         # Add radio button for selection
         selected_equipment = st.radio(
@@ -1632,7 +1979,6 @@ def render_equipment_management(active_scenario_id):
                 st.rerun()
         with col2:
             if st.button("📋 Clone", key="clone_equipment"):
-                # Get the equipment to clone
                 equipment_to_clone = equipment_df[equipment_df['name'] == selected_equipment].iloc[0]
                 
                 # Find the next available number for the clone
@@ -1642,412 +1988,333 @@ def render_equipment_management(active_scenario_id):
                 while f"{base_name}{counter}" in existing_names:
                     counter += 1
                 
-                # Create clone data
+                # Create clone data with correct column names
                 clone_data = {
                     'scenario_id': active_scenario_id,
                     'name': f"{base_name}{counter}",
-                    'description': equipment_to_clone['description'],
-                    'purchase_price': equipment_to_clone['purchase_price'],
-                    'installation_cost': equipment_to_clone['installation_cost'],
+                    'cost': equipment_to_clone['cost'],
                     'useful_life': equipment_to_clone['useful_life'],
-                    'maintenance_cost': equipment_to_clone['maintenance_cost'],
-                    'power_consumption': equipment_to_clone['power_consumption'],
-                    'financing_method': equipment_to_clone['financing_method'],
-                    'financing_term': equipment_to_clone['financing_term'],
-                    'interest_rate': equipment_to_clone['interest_rate'],
-                    'lease_payment': equipment_to_clone['lease_payment']
+                    'max_capacity': equipment_to_clone['max_capacity'],
+                    'maintenance_cost_pct': equipment_to_clone['maintenance_cost_pct'],
+                    'availability_pct': equipment_to_clone['availability_pct'],
+                    'purchase_year': equipment_to_clone['purchase_year'],
+                    'financing_type': equipment_to_clone['financing_type'],
+                    'is_leased': equipment_to_clone['is_leased'],
+                    'lease_type': equipment_to_clone['lease_type'],
+                    'lease_rate': equipment_to_clone['lease_rate'],
+                    'debt_ratio': equipment_to_clone['debt_ratio'],
+                    'interest_rate': equipment_to_clone['interest_rate']
                 }
                 
                 add_equipment(clone_data)
+                st.success(f"Created clone: {clone_data['name']}")
                 st.rerun()
-        
-        # Display equipment details in a table
-        st.dataframe(
-            equipment_df.drop(['id', 'scenario_id'], axis=1),
-            hide_index=True
-        )
+    else:
+        st.info("No equipment added yet")
     
     # Add new equipment form
     st.subheader("Add New Equipment")
+    
+    # Get standard equipment list and add "Create New" option
+    standard_equipment = get_standard_equipment()
+    equipment_options = ["Create New"] + [eq['name'] for eq in standard_equipment]
+    
+    selected_option = st.selectbox(
+        "Choose equipment type or create new",
+        options=equipment_options,
+        help="Select from standard equipment types or create a custom one"
+    )
+    
+    # Financing section
+    st.markdown("##### Financing Details")
+    financing_type = st.selectbox(
+        "1. Select Financing Type",
+        ["Cash Purchase", "Lease", "Debt Financing"],
+        key="financing_type"
+    )
+  
     with st.form("add_equipment_form"):
         col1, col2 = st.columns(2)
         
+        # Pre-fill values if standard equipment selected
+        default_values = {}
+        if selected_option != "Create New":
+            default_values = next(eq for eq in standard_equipment if eq['name'] == selected_option)
+        
         with col1:
-            name = st.text_input("Equipment Name")
-            description = st.text_area("Description")
-            purchase_price = st.number_input("Purchase Price ($)", min_value=0.0, step=1000.0)
-            installation_cost = st.number_input("Installation Cost ($)", min_value=0.0, step=100.0)
-            useful_life = st.number_input("Useful Life (years)", min_value=1, step=1)
+            name = st.text_input("Equipment Name", value=default_values.get('name', '') if selected_option != "Create New" else "")
+            cost = st.number_input("Purchase Price ($)", min_value=0.0, step=1000.0, value=float(default_values.get('cost', 0)))
+            useful_life = st.number_input("Useful Life (years)", min_value=1, step=1, value=int(default_values.get('useful_life', 1)))
+            max_capacity = st.number_input("Maximum Capacity (hours/year)", min_value=0.0, step=100.0, value=float(default_values.get('max_capacity', 2080)))
+            maintenance_cost_pct = st.number_input("Annual Maintenance (% of purchase price)", min_value=0.0, max_value=100.0, step=0.1, value=float(default_values.get('maintenance_cost_pct', 5)))
         
         with col2:
-            maintenance_cost = st.number_input("Annual Maintenance Cost ($)", min_value=0.0, step=100.0)
-            power_consumption = st.number_input("Power Consumption (kW)", min_value=0.0, step=0.1)
-            
-            # Financing section with clear steps
-            st.markdown("##### Financing Details")
-            financing_method = st.selectbox(
-                "1. Select Financing Method",
-                ["Cash", "Lease", "Debt"],
-                key="financing_method"
-            )
+            availability_pct = st.number_input("Availability (%)", min_value=0.0, max_value=100.0, step=0.1, value=float(default_values.get('availability_pct', 90)))
+            purchase_year = st.number_input("Purchase Year", min_value=2024, step=1, value=int(default_values.get('purchase_year', 2024)))
             
             # Show relevant financing fields based on selection
-            if financing_method == "Lease":
-                lease_payment = st.number_input("2. Monthly Lease Payment ($)", min_value=0.0, step=100.0)
-                financing_term = st.number_input("3. Lease Term (months)", min_value=1, step=12)
-                interest_rate = 0.0  # Not applicable for lease
-            elif financing_method == "Debt":
-                lease_payment = 0.0  # Not applicable for debt
-                financing_term = st.number_input("2. Loan Term (months)", min_value=1, step=12)
-                interest_rate = st.number_input("3. Annual Interest Rate (%)", min_value=0.0, max_value=100.0, step=0.1)
-            else:  # Cash
-                lease_payment = 0.0
-                financing_term = 0
+            is_leased = financing_type == "Lease"
+            if is_leased:
+                lease_type = st.selectbox(
+                    "2. Lease Type", 
+                    ["Operating Lease", "Capital Lease", "$1 Buyout Lease"],
+                    key="lease_type"
+                )
+                lease_rate = st.number_input("3. Monthly Lease Rate ($)", min_value=0.0, step=100.0)
+                debt_ratio = 0.0
+                interest_rate = 0.0
+            elif financing_type == "Debt Financing":
+                lease_type = None
+                lease_rate = 0.0
+                debt_ratio = st.number_input("2. Debt Ratio (%)", min_value=0.0, max_value=100.0, step=1.0, value=80.0) / 100
+                interest_rate = st.number_input("3. Annual Interest Rate (%)", min_value=0.0, max_value=100.0, step=0.1, value=5.0) / 100
+            else:  # Cash Purchase
+                lease_type = None
+                lease_rate = 0.0
+                debt_ratio = 0.0
                 interest_rate = 0.0
         
         if st.form_submit_button("Add Equipment"):
-            if name:
+            print(f"\n=== Adding equipment with name: '{name}' ===")
+            if name and len(name.strip()) > 0:
                 equipment_data = {
                     'scenario_id': active_scenario_id,
-                    'name': name,
-                    'description': description,
-                    'purchase_price': purchase_price,
-                    'installation_cost': installation_cost,
+                        'name': name.strip(),
+                    'cost': cost,
                     'useful_life': useful_life,
-                    'maintenance_cost': maintenance_cost,
-                    'power_consumption': power_consumption,
-                    'financing_method': financing_method,
-                    'financing_term': financing_term,
-                    'interest_rate': interest_rate,
-                    'lease_payment': lease_payment
+                    'max_capacity': max_capacity,
+                    'maintenance_cost_pct': maintenance_cost_pct,
+                    'availability_pct': availability_pct,
+                    'purchase_year': purchase_year,
+                        'financing_type': financing_type,
+                    'is_leased': 1 if is_leased else 0,
+                        'lease_type': lease_type,
+                        'lease_rate': lease_rate,
+                        'debt_ratio': debt_ratio,
+                        'interest_rate': interest_rate
                 }
+                print(f"Equipment data: {equipment_data}")
                 add_equipment(equipment_data)
+                st.success(f"Added equipment: {name}")
                 st.rerun()
             else:
                 st.error("Equipment name is required")
 
 def render_product_management(active_scenario_id):
     st.title("Product Management")
-    
-    print(f"\n=== Rendering product management for scenario {active_scenario_id} ===")
-    
-    if active_scenario_id is None:
-        st.error("No active scenario selected. Please select a scenario first.")
-        return
-        
-    # Get active scenario details
-    scenario = get_scenario(active_scenario_id)
-    if scenario is None:
-        st.error("Could not load the active scenario. Please try selecting a different scenario.")
-        return
-        
-    # Make scenario context very prominent
-    st.subheader(f"Managing Products for: {scenario['name']}")
+    st.write(f"Managing products for scenario: {get_scenario(active_scenario_id)['name']}")
     
     # Get existing products
     products_df = get_products(active_scenario_id)
-    print(f"Found {len(products_df)} products for scenario {active_scenario_id}")
+    print(f"Found {len(products_df)} products")
     
-    # Get equipment for cost drivers
-    equipment_df = get_equipment(active_scenario_id)
-    
-    # Display existing products
-    if not products_df.empty:
+    if isinstance(products_df, pd.DataFrame) and not products_df.empty:
         st.subheader("Current Products")
         
-        # Create columns for the table and actions
-        col1, col2 = st.columns([0.8, 0.2])
+        # Create display DataFrame with formatted columns
+        display_df = products_df[['name', 'initial_units', 'unit_price', 'growth_rate', 'introduction_year']].copy()
         
-        with col1:
-            # Display products in a table
-            display_df = products_df[[
-                'name', 'initial_units', 'unit_price', 'growth_rate',
-                'introduction_year', 'market_size', 'price_elasticity'
-            ]].copy()
-            
-            # Format the display values
-            display_df = display_df.style.format({
-                'unit_price': '${:,.2f}',
-                'growth_rate': '{:.1%}',
-                'initial_units': '{:,.0f}',
-                'market_size': '{:,.0f}',
-                'price_elasticity': '{:.2f}'
-            })
-            
-            st.dataframe(display_df, use_container_width=True)
+        # Format columns
+        display_df['unit_price'] = display_df['unit_price'].apply(lambda x: f"${x:,.2f}")
+        display_df['initial_units'] = display_df['initial_units'].apply(lambda x: f"{x:,.0f}")
+        display_df['growth_rate'] = display_df['growth_rate'].apply(lambda x: f"{x:.1%}")
         
-        with col2:
-            st.write("Actions")
-            # Radio buttons for product selection
-            selected_product = st.radio(
-                "Select Product",
-                options=products_df['name'].tolist(),
-                key="selected_product"
-            )
-            selected_id = products_df[products_df['name'] == selected_product]['id'].values[0]
-            
-            # Action buttons
-            if st.button("🗑️ Delete Selected"):
-                try:
-                    print(f"Deleting product: {selected_product} (ID: {selected_id})")
-                    delete_product(selected_id)
-                    # Clear the session state for selected product
-                    if 'selected_product' in st.session_state:
-                        del st.session_state.selected_product
-                    st.success(f"Product '{selected_product}' deleted successfully!")
-                    st.rerun()
-                except Exception as e:
-                    print(f"Error deleting product: {str(e)}")
-                    st.error(f"Error deleting product: {str(e)}")
-            
-            if st.button("📋 Clone Selected"):
-                try:
-                    # Get the product data to clone
-                    product_to_clone = products_df[products_df['name'] == selected_product].iloc[0]
-                    clone_data = product_to_clone.to_dict()
-                    
-                    # Modify the name to indicate it's a clone
-                    base_name = clone_data['name']
-                    counter = 1
-                    while True:
-                        new_name = f"{base_name} ({counter})"
-                        if new_name not in products_df['name'].values:
-                            break
-                        counter += 1
-                    
-                    clone_data['name'] = new_name
-                    clone_data['scenario_id'] = active_scenario_id
-                    
-                    # Add the cloned product
-                    product_id = add_product(clone_data)
-                    
-                    # Clone cost drivers if equipment exists
-                    if not equipment_df.empty:
-                        original_cost_drivers = get_cost_drivers(selected_id)
-                        for _, cd in original_cost_drivers.iterrows():
-                            cd_data = cd.to_dict()
-                            cd_data['product_id'] = product_id
-                            add_cost_driver(cd_data)
-                    
-                    st.success(f"Product cloned as '{new_name}'")
-                    st.rerun()
-                except Exception as e:
-                    print(f"Error cloning product: {str(e)}")
-                    st.error(f"Error cloning product: {str(e)}")
-    else:
-        st.info("No products found for this scenario. Add some products below.")
-    
-    # Add new product form
-    st.markdown("---")
-    st.subheader("Add New Product")
-    
-    with st.form("add_product_form"):
-        # Basic product info
-        name = st.text_input("Product Name", key="product_name")
+        # Rename columns for display
+        display_df.columns = ['Product', 'Initial Units', 'Unit Price', 'Growth Rate', 'Introduction Year']
         
-        col1, col2 = st.columns(2)
-        with col1:
-            initial_units = st.number_input("Initial Units", min_value=0, value=1000, key="product_initial_units")
-            unit_price = st.number_input("Unit Price ($)", min_value=0.0, value=100.0, key="product_unit_price")
-            growth_rate = st.number_input("Annual Growth Rate (%)", min_value=0.0, value=5.0, key="product_growth_rate") / 100
+        st.dataframe(display_df, hide_index=True)
         
-        with col2:
-            introduction_year = st.number_input("Introduction Year", min_value=0, value=0, key="product_intro_year")
-            market_size = st.number_input("Market Size (units)", min_value=0, value=10000, key="product_market_size")
-            price_elasticity = st.number_input("Price Elasticity", min_value=0.0, value=1.0, key="product_elasticity")
-        
-        # Equipment utilization section
-        if not equipment_df.empty:
-            st.subheader("Equipment Utilization")
-            st.info("Define how this product uses each piece of equipment")
-            
-            equipment_costs = {}
-            for _, equipment in equipment_df.iterrows():
-                st.write(f"**{equipment['name']}**")
-                col1, col2 = st.columns(2)
-                with col1:
-                    hours_per_unit = st.number_input(
-                        "Hours per Unit",
-                        min_value=0.0,
-                        value=0.5,
-                        key=f"hours_per_unit_{equipment['id']}"
-                    )
-                    materials_cost = st.number_input(
-                        "Materials Cost per Unit ($)",
-                        min_value=0.0,
-                        value=20.0,
-                        key=f"materials_cost_{equipment['id']}"
-                    )
-                with col2:
-                    labor_hours = st.number_input(
-                        "Labor Hours per Unit",
-                        min_value=0.0,
-                        value=0.5,
-                        key=f"labor_hours_{equipment['id']}"
-                    )
-                    labor_rate = st.number_input(
-                        "Labor Rate per Hour ($)",
-                        min_value=0.0,
-                        value=30.0,
-                        key=f"labor_rate_{equipment['id']}"
-                    )
-                
-                equipment_costs[equipment['id']] = {
-                    'hours_per_unit': hours_per_unit,
-                    'materials_cost_per_unit': materials_cost,
-                    'machinist_hours_per_unit': labor_hours,
-                    'machinist_labor_cost_per_hour': labor_rate,
-                    'design_labor_cost_per_hour': 40.0,
-                    'design_hours_per_unit': 0.25,
-                    'supervision_cost_per_hour': 50.0,
-                    'supervision_hours_per_unit': 0.1
-                }
-        
-        if st.form_submit_button("Add Product"):
-            try:
-                if not name:
-                    st.error("Please enter a product name")
-                else:
-                    print(f"\n=== Adding new product: {name} ===")
-                    # Create product data
-                    product_data = {
-                        'scenario_id': active_scenario_id,
-                        'name': name,
-                        'initial_units': initial_units,
-                        'unit_price': unit_price,
-                        'growth_rate': growth_rate,
-                        'introduction_year': introduction_year,
-                        'market_size': market_size,
-                        'price_elasticity': price_elasticity
-                    }
-                    
-                    print("Adding product with data:", product_data)
-                    # Add the product
-                    product_id = add_product(product_data)
-                    
-                    if product_id:
-                        # Add cost drivers for each equipment
-                        if not equipment_df.empty:
-                            print(f"Adding cost drivers for {len(equipment_df)} equipment items")
-                            for _, equipment in equipment_df.iterrows():
-                                cost_data = equipment_costs[equipment['id']]
-                                cost_driver_data = {
-                                    'product_id': product_id,
-                                    'equipment_id': equipment['id'],
-                                    'cost_per_hour': 50.0,  # Default equipment operating cost
-                                    **cost_data
-                                }
-                                add_cost_driver(cost_driver_data)
-                        
-                        st.success(f"Successfully added product: {name}")
-                        st.rerun()
-                    else:
-                        st.error("Failed to add product")
-                    
-            except Exception as e:
-                print(f"Error adding product: {str(e)}")
-                import traceback
-                print(f"Error adding product: {traceback.format_exc()}")
-                st.error(f"Error adding product: {str(e)}")
-    
-    # Show unit economics for selected product
-    if len(products_df) > 0:
-        st.markdown("---")
-        st.subheader("Unit Economics Analysis")
-        product_names = products_df['name'].tolist()
-        selected_product = st.selectbox(
-            "Select Product for Analysis",
-            product_names,
-            key="unit_economics_product"
+        # Add radio button for selection
+        selected_product = st.radio(
+            "Select product to modify:",
+            products_df['name'].tolist(),
+            key="product_selector"
         )
         
-        if selected_product:
-            selected_row = products_df[products_df['name'] == selected_product].iloc[0]
-            product_id = selected_row['id']
-            economics = calculate_unit_economics(product_id)
+        # Show delete and clone buttons for selected product
+        col1, col2 = st.columns([1, 11])
+        with col1:
+            if st.button("🗑️ Delete", key="delete_product"):
+                product_id = products_df[products_df['name'] == selected_product].iloc[0]['id']
+                delete_product(product_id)
+                st.rerun()
+    
+    # Add new product form
+    st.subheader("Add New Product")
+    
+    with st.form("add_product_form", clear_on_submit=True):
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            name = st.text_input("Product Name").strip()
+            initial_units = st.number_input("Initial Annual Units", min_value=0, step=100, value=1000)
+            unit_price = st.number_input("Unit Price ($)", min_value=0.0, step=1.0, value=100.0)
             
-            if 'error' not in economics:
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.metric("Unit Price", f"${economics['unit_price']:.2f}")
-                    st.metric("Unit Cost", f"${economics['unit_cost']:.2f}")
-                    st.metric("Gross Profit/Unit", f"${economics['gross_profit_per_unit']:.2f}")
-                with col2:
-                    st.metric("Equipment Costs", f"${economics['equipment_costs']:.2f}")
-                    st.metric("Materials Costs", f"${economics['materials_costs']:.2f}")
-                    st.metric("Labor Costs", f"${economics['labor_costs']:.2f}")
+        with col2:
+            growth_rate = st.number_input("Annual Growth Rate (%)", min_value=-100.0, max_value=1000.0, value=10.0) / 100
+            introduction_year = st.number_input("Introduction Year", min_value=2024, step=1, value=2024)
+            market_size = st.number_input("Total Market Size (units)", min_value=0, step=1000, value=10000)
+            price_elasticity = st.number_input("Price Elasticity", min_value=-10.0, max_value=0.0, value=-1.0)
+        
+        if st.form_submit_button("Add Product"):
+            if name:
+                product_data = {
+                    'scenario_id': active_scenario_id,
+                    'name': name,
+                    'initial_units': initial_units,
+                    'unit_price': unit_price,
+                    'growth_rate': growth_rate,
+                    'introduction_year': introduction_year,
+                    'market_size': market_size,
+                    'price_elasticity': price_elasticity
+                }
+                print(f"Adding product with data: {product_data}")
+                add_product(product_data)
+                st.success(f"Added product: {name}")
+                st.rerun()
             else:
-                st.error(f"Error calculating unit economics: {economics['error']}")
+                st.error("Product name is required")
 
 def render_financial_analysis(active_scenario_id):
     """Render the financial analysis page"""
     st.header("Financial Analysis")
     
-    # Get scenario info and data
+    # Get scenario data
     scenario = get_scenario(active_scenario_id)
     if scenario is None:
         st.error("Could not load scenario data")
         return
-        
-    # Header with Calculate button
-    col1, col2 = st.columns([6, 1])
-    with col1:
-        st.write(f"Analyzing scenario: {scenario['name']}")
-    with col2:
-        if st.button("🔄 Calculate", help="Recalculate financial projections"):
-            calculate_financial_projections(active_scenario_id)
-            st.rerun()
+    
+    st.write(f"Analyzing scenario: {scenario['name']}")
     
     # Get financial projections
-    projections_df = get_financial_projections(active_scenario_id)
+    financial_projections = get_financial_projections(active_scenario_id)
     
-    if not isinstance(projections_df, pd.DataFrame) or projections_df.empty:
+    # Add Calculate button
+    if st.button("🔄 Calculate", help="Recalculate financial projections"):
+        calculate_financial_projections(active_scenario_id)
+        st.rerun()
+    
+    if not isinstance(financial_projections, pd.DataFrame) or financial_projections.empty:
         st.warning("No financial projections available. Click Calculate to generate projections.")
-        if st.button("Calculate Projections"):
-            calculate_financial_projections(active_scenario_id)
-            st.rerun()
         return
     
+    # Get products and equipment data
+    products_df = get_products(active_scenario_id)
+    equipment_df = get_equipment(active_scenario_id)
+    
+    # Create detailed product economics table
+    st.subheader("Product Economics")
+    product_details = []
+    for _, product in products_df.iterrows():
+        economics = calculate_unit_economics(product['id'])
+        if 'error' not in economics:
+            product_details.append({
+                'Product': economics['product_name'],
+                'Unit Price': f"${economics['unit_price']:,.2f}",
+                'Unit Cost': f"${economics['unit_cost']:,.2f}",
+                'Equipment Cost': f"${economics['equipment_costs']:,.2f}",
+                'Materials Cost': f"${economics['materials_costs']:,.2f}",
+                'Labor Cost': f"${economics['labor_costs']:,.2f}",
+                'Gross Profit/Unit': f"${economics['gross_profit_per_unit']:,.2f}",
+                'Gross Margin': f"{economics['gross_margin_pct']:.1f}%"
+            })
+    
+    if product_details:
+        product_economics_df = pd.DataFrame(product_details)
+        st.dataframe(product_economics_df, hide_index=True)
+        
+        # Download button for product economics
+        csv = product_economics_df.to_csv(index=False)
+        st.download_button(
+            label="📥 Download Product Economics",
+            data=csv,
+            file_name="product_economics.csv",
+            mime="text/csv",
+            help="Download detailed product economics data"
+        )
+    
+    # Create equipment utilization table
+    st.subheader("Equipment Utilization")
+    latest_year = financial_projections['year'].max()
+    utilization = calculate_equipment_utilization(active_scenario_id, latest_year)
+    
+    if 'equipment_utilization' in utilization:
+        equipment_details = []
+        for eq in utilization['equipment_utilization']:
+            equipment_details.append({
+                'Equipment': eq['equipment_name'],
+                'Available Hours': f"{eq['max_capacity']:,.0f}",
+                'Used Hours': f"{eq['used_capacity']:,.0f}",
+                'Utilization': f"{eq['utilization_pct']:.1f}%"
+            })
+        
+        if equipment_details:
+            equipment_util_df = pd.DataFrame(equipment_details)
+            st.dataframe(equipment_util_df, hide_index=True)
+            
+            # Download button for equipment utilization
+            csv = equipment_util_df.to_csv(index=False)
+            st.download_button(
+                label="📥 Download Equipment Utilization",
+                data=csv,
+                file_name="equipment_utilization.csv",
+                mime="text/csv",
+                help="Download detailed equipment utilization data"
+            )
+    
+    # Financial Statements
+    st.subheader("Financial Statements")
+    
     # Format currency columns
-    currency_cols = ['revenue', 'cogs', 'gross_profit', 'operating_expenses', 'ebitda', 'depreciation', 'ebit', 'interest', 'tax', 'net_income']
+    currency_cols = ['revenue', 'cogs', 'gross_profit', 'operating_expenses', 
+                    'ebitda', 'depreciation', 'ebit', 'interest', 'tax', 'net_income']
+    
+    display_df = financial_projections.copy()
+    
+    # Format currency columns
     for col in currency_cols:
-        if col in projections_df.columns:
-            projections_df[col] = projections_df[col].apply(lambda x: f"${float(x):,.0f}" if pd.notnull(x) else "$0")
+        if col in display_df.columns:
+            display_df[col] = display_df[col].apply(lambda x: f"${x:,.0f}" if pd.notnull(x) else "$0")
     
     # Format percentage columns
-    if 'capacity_utilization' in projections_df.columns:
-        projections_df['capacity_utilization'] = projections_df['capacity_utilization'].apply(lambda x: f"{float(x):.1f}%" if pd.notnull(x) else "0.0%")
+    if 'capacity_utilization' in display_df.columns:
+        display_df['capacity_utilization'] = display_df['capacity_utilization'].apply(lambda x: f"{x:.1f}%" if pd.notnull(x) else "0%")
     
-    # Calculate profitability metrics
-    metrics_df = pd.DataFrame({
-        'Metric': [
-            'Revenue Growth',
-            'Gross Margin',
-            'Operating Margin',
-            'EBITDA Margin',
-            'Net Margin'
-        ],
-        'Year 1': ['N/A', '40.0%', '25.0%', '30.0%', '15.0%'],
-        'Year 2': ['15.0%', '42.0%', '27.0%', '32.0%', '17.0%'],
-        'Year 3': ['12.0%', '43.0%', '28.0%', '33.0%', '18.0%'],
-        'Year 4': ['10.0%', '44.0%', '29.0%', '34.0%', '19.0%'],
-        'Year 5': ['8.0%', '45.0%', '30.0%', '35.0%', '20.0%']
-    })
+    # Display the table
+    st.dataframe(display_df.drop(['id', 'scenario_id'], axis=1, errors='ignore'), hide_index=True)
     
-    # Display financial statements
-    st.subheader("Financial Statements")
-    st.dataframe(
-        projections_df,
-        hide_index=True,
-        use_container_width=True
+    # Download button for financial statements
+    csv = financial_projections.to_csv(index=False)
+    st.download_button(
+        label="📥 Download Financial Statements",
+        data=csv,
+        file_name="financial_statements.csv",
+        mime="text/csv",
+        help="Download detailed financial statements"
     )
     
-    # Display profitability metrics
+    # Profitability Metrics
     st.subheader("Profitability Metrics")
-    st.dataframe(
-        metrics_df,
-        hide_index=True,
-        use_container_width=True
+    metrics_df = pd.DataFrame({
+        'Year': financial_projections['year'],
+        'Revenue': financial_projections['revenue'].apply(lambda x: f"${x:,.0f}"),
+        'Gross Margin': (financial_projections['gross_profit'] / financial_projections['revenue'] * 100).apply(lambda x: f"{x:.1f}%"),
+        'EBITDA Margin': (financial_projections['ebitda'] / financial_projections['revenue'] * 100).apply(lambda x: f"{x:.1f}%"),
+        'Net Margin': (financial_projections['net_income'] / financial_projections['revenue'] * 100).apply(lambda x: f"{x:.1f}%"),
+        'Capacity Utilization': financial_projections['capacity_utilization'].apply(lambda x: f"{x:.1f}%")
+    })
+    
+    st.dataframe(metrics_df, hide_index=True)
+    
+    # Download button for profitability metrics
+    csv = metrics_df.to_csv(index=False)
+    st.download_button(
+        label="📥 Download Profitability Metrics",
+        data=csv,
+        file_name="profitability_metrics.csv",
+        mime="text/csv",
+        help="Download detailed profitability metrics"
     )
 
 def render_capacity_planning(active_scenario_id):
