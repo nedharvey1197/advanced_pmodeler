@@ -1,3 +1,6 @@
+streamlit
+plotly
+sqlite3
 sqlalchemy>=1.4.0
 pandas>=1.3.0
 numpy>=1.20.0

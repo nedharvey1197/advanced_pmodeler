@@ -1,13 +1,34 @@
-# utils/db_utils.py
+"""
+Database utilities module for the manufacturing expansion financial model.
+
+This module provides essential database operations and data migration functionality:
+- JSON data loading and database migration
+- Scenario management (CRUD operations)
+- Equipment management
+- Product management
+- Cost driver management
+- Scenario cloning with related data
+"""
+
 import json
 from pathlib import Path
+from typing import Dict, List, Any, Optional
 from ..models import (
     Scenario, Equipment, Product, CostDriver, FinancialProjection,
     get_session
 )
 
-def load_json_data(file_path="financial_model_data.json"):
-    """Load data from JSON file"""
+def load_json_data(file_path="financial_model_data.json") -> Dict[str, Any]:
+    """
+    Load data from a JSON file containing financial model data.
+    
+    Args:
+        file_path (str): Path to the JSON file containing model data
+        
+    Returns:
+        Dict[str, Any]: Dictionary containing equipment, products, and cost drivers data
+                       Returns empty structure if file not found
+    """
     try:
         with open(file_path, "r") as f:
             return json.load(f)
@@ -15,8 +36,16 @@ def load_json_data(file_path="financial_model_data.json"):
         print(f"File {file_path} not found. Returning empty data structure.")
         return {"equipment": [], "products": [], "cost_drivers": {}}
         
-def migrate_data_to_database(json_data):
-    """Migrate data from JSON to SQLite database"""
+def migrate_data_to_database(json_data: Dict[str, Any]) -> int:
+    """
+    Migrate data from JSON format to SQLite database.
+    
+    Args:
+        json_data (Dict[str, Any]): Dictionary containing model data
+        
+    Returns:
+        int: ID of the created base scenario
+    """
     session = get_session()
     
     # Create a base scenario
@@ -51,7 +80,7 @@ def migrate_data_to_database(json_data):
         equipment_map[equipment.name] = equipment.id
     
     # Add products
-    product_map = {}  # To map old product names to new IDs
+    product_map = {}
     for prod_data in json_data.get("products", []):
         product = Product(
             scenario_id=base_scenario.id,
@@ -243,33 +272,78 @@ def export_scenario_to_json(scenario_id, file_path="exported_scenario.json"):
     
     return data
 
-def get_scenario_by_id(scenario_id):
-    """Get a scenario by ID"""
+def get_scenario_by_id(scenario_id: int) -> Optional[Scenario]:
+    """
+    Retrieve a scenario by its ID.
+    
+    Args:
+        scenario_id (int): ID of the scenario to retrieve
+        
+    Returns:
+        Optional[Scenario]: The scenario if found, None otherwise
+    """
     session = get_session()
     return session.query(Scenario).filter(Scenario.id == scenario_id).first()
 
-def get_all_scenarios():
-    """Get all scenarios"""
+def get_all_scenarios() -> List[Scenario]:
+    """
+    Retrieve all scenarios from the database.
+    
+    Returns:
+        List[Scenario]: List of all scenarios
+    """
     session = get_session()
     return session.query(Scenario).all()
 
-def get_equipment_by_scenario(scenario_id):
-    """Get all equipment for a scenario"""
+def get_equipment_by_scenario(scenario_id: int) -> List[Equipment]:
+    """
+    Retrieve all equipment associated with a scenario.
+    
+    Args:
+        scenario_id (int): ID of the scenario
+        
+    Returns:
+        List[Equipment]: List of equipment for the scenario
+    """
     session = get_session()
     return session.query(Equipment).filter(Equipment.scenario_id == scenario_id).all()
 
-def get_products_by_scenario(scenario_id):
-    """Get all products for a scenario"""
+def get_products_by_scenario(scenario_id: int) -> List[Product]:
+    """
+    Retrieve all products associated with a scenario.
+    
+    Args:
+        scenario_id (int): ID of the scenario
+        
+    Returns:
+        List[Product]: List of products for the scenario
+    """
     session = get_session()
     return session.query(Product).filter(Product.scenario_id == scenario_id).all()
 
-def get_cost_drivers_by_product(product_id):
-    """Get all cost drivers for a product"""
+def get_cost_drivers_by_product(product_id: int) -> List[CostDriver]:
+    """
+    Retrieve all cost drivers associated with a product.
+    
+    Args:
+        product_id (int): ID of the product
+        
+    Returns:
+        List[CostDriver]: List of cost drivers for the product
+    """
     session = get_session()
     return session.query(CostDriver).filter(CostDriver.product_id == product_id).all()
 
-def delete_scenario(scenario_id):
-    """Delete a scenario and all related records"""
+def delete_scenario(scenario_id: int) -> bool:
+    """
+    Delete a scenario and all its related records.
+    
+    Args:
+        scenario_id (int): ID of the scenario to delete
+        
+    Returns:
+        bool: True if deletion successful, False if scenario not found
+    """
     session = get_session()
     
     # Find scenario
@@ -282,8 +356,18 @@ def delete_scenario(scenario_id):
     session.commit()
     return True
 
-def create_scenario(name, description, **kwargs):
-    """Create a new scenario"""
+def create_scenario(name: str, description: str, **kwargs) -> Scenario:
+    """
+    Create a new scenario.
+    
+    Args:
+        name (str): Name of the scenario
+        description (str): Description of the scenario
+        **kwargs: Additional scenario parameters
+        
+    Returns:
+        Scenario: The created scenario
+    """
     session = get_session()
     scenario = Scenario(
         name=name,
@@ -294,8 +378,21 @@ def create_scenario(name, description, **kwargs):
     session.commit()
     return scenario
 
-def create_equipment(scenario_id, name, cost, useful_life, max_capacity, **kwargs):
-    """Create a new equipment record"""
+def create_equipment(scenario_id: int, name: str, cost: float, useful_life: int, max_capacity: float, **kwargs) -> Equipment:
+    """
+    Create a new equipment record.
+    
+    Args:
+        scenario_id (int): ID of the associated scenario
+        name (str): Name of the equipment
+        cost (float): Cost of the equipment
+        useful_life (int): Useful life in years
+        max_capacity (float): Maximum capacity
+        **kwargs: Additional equipment parameters
+        
+    Returns:
+        Equipment: The created equipment record
+    """
     session = get_session()
     equipment = Equipment(
         scenario_id=scenario_id,
@@ -309,8 +406,21 @@ def create_equipment(scenario_id, name, cost, useful_life, max_capacity, **kwarg
     session.commit()
     return equipment
 
-def create_product(scenario_id, name, initial_units, unit_price, growth_rate, **kwargs):
-    """Create a new product record"""
+def create_product(scenario_id: int, name: str, initial_units: int, unit_price: float, growth_rate: float, **kwargs) -> Product:
+    """
+    Create a new product record.
+    
+    Args:
+        scenario_id (int): ID of the associated scenario
+        name (str): Name of the product
+        initial_units (int): Initial number of units
+        unit_price (float): Price per unit
+        growth_rate (float): Annual growth rate
+        **kwargs: Additional product parameters
+        
+    Returns:
+        Product: The created product record
+    """
     session = get_session()
     product = Product(
         scenario_id=scenario_id,
@@ -324,8 +434,20 @@ def create_product(scenario_id, name, initial_units, unit_price, growth_rate, **
     session.commit()
     return product
 
-def create_cost_driver(product_id, equipment_id, cost_per_hour, hours_per_unit, **kwargs):
-    """Create a new cost driver record"""
+def create_cost_driver(product_id: int, equipment_id: int, cost_per_hour: float, hours_per_unit: float, **kwargs) -> CostDriver:
+    """
+    Create a new cost driver record.
+    
+    Args:
+        product_id (int): ID of the associated product
+        equipment_id (int): ID of the associated equipment
+        cost_per_hour (float): Cost per hour of operation
+        hours_per_unit (float): Hours required per unit
+        **kwargs: Additional cost driver parameters
+        
+    Returns:
+        CostDriver: The created cost driver record
+    """
     session = get_session()
     cost_driver = CostDriver(
         product_id=product_id,
@@ -338,8 +460,18 @@ def create_cost_driver(product_id, equipment_id, cost_per_hour, hours_per_unit, 
     session.commit()
     return cost_driver
 
-def clone_scenario(scenario_id, new_name, new_description):
-    """Clone an existing scenario with all its equipment, products, and cost drivers"""
+def clone_scenario(scenario_id: int, new_name: str, new_description: str) -> Optional[Scenario]:
+    """
+    Clone an existing scenario with all its related data.
+    
+    Args:
+        scenario_id (int): ID of the scenario to clone
+        new_name (str): Name for the new scenario
+        new_description (str): Description for the new scenario
+        
+    Returns:
+        Optional[Scenario]: The cloned scenario if successful, None if original not found
+    """
     session = get_session()
     
     # Get the original scenario
@@ -385,7 +517,7 @@ def clone_scenario(scenario_id, new_name, new_description):
         equipment_map[old_equipment.id] = new_equipment.id
     
     # Clone products
-    product_map = {}  # Map old product IDs to new product IDs
+    product_map = {}
     for old_product in original.products:
         new_product = Product(
             scenario_id=new_scenario.id,
@@ -402,25 +534,21 @@ def clone_scenario(scenario_id, new_name, new_description):
         product_map[old_product.id] = new_product.id
     
     # Clone cost drivers
-    for old_product_id, new_product_id in product_map.items():
-        old_cost_drivers = session.query(CostDriver).filter(CostDriver.product_id == old_product_id).all()
-        
-        for old_cd in old_cost_drivers:
-            if old_cd.equipment_id in equipment_map:
-                new_cost_driver = CostDriver(
-                    product_id=new_product_id,
-                    equipment_id=equipment_map[old_cd.equipment_id],
-                    cost_per_hour=old_cd.cost_per_hour,
-                    hours_per_unit=old_cd.hours_per_unit,
-                    materials_cost_per_unit=old_cd.materials_cost_per_unit,
-                    machinist_labor_cost_per_hour=old_cd.machinist_labor_cost_per_hour,
-                    machinist_hours_per_unit=old_cd.machinist_hours_per_unit,
-                    design_labor_cost_per_hour=old_cd.design_labor_cost_per_hour,
-                    design_hours_per_unit=old_cd.design_hours_per_unit,
-                    supervision_cost_per_hour=old_cd.supervision_cost_per_hour,
-                    supervision_hours_per_unit=old_cd.supervision_hours_per_unit
-                )
-                session.add(new_cost_driver)
+    for old_driver in original.cost_drivers:
+        new_driver = CostDriver(
+            product_id=product_map[old_driver.product_id],
+            equipment_id=equipment_map[old_driver.equipment_id],
+            cost_per_hour=old_driver.cost_per_hour,
+            hours_per_unit=old_driver.hours_per_unit,
+            materials_cost_per_unit=old_driver.materials_cost_per_unit,
+            machinist_labor_cost_per_hour=old_driver.machinist_labor_cost_per_hour,
+            machinist_hours_per_unit=old_driver.machinist_hours_per_unit,
+            design_labor_cost_per_hour=old_driver.design_labor_cost_per_hour,
+            design_hours_per_unit=old_driver.design_hours_per_unit,
+            supervision_cost_per_hour=old_driver.supervision_cost_per_hour,
+            supervision_hours_per_unit=old_driver.supervision_hours_per_unit
+        )
+        session.add(new_driver)
     
     session.commit()
     return new_scenario
