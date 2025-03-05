@@ -1,0 +1,31 @@
+{
+    "database": {
+        "url": "sqlite:///data/manufacturing_model.db",
+        "echo": false
+    },
+    "logging": {
+        "level": "INFO",
+        "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        "file": "data/output/app.log"
+    },
+    "templates": {
+        "directory": "data/templates",
+        "default_template": "scenario_template.xlsx"
+    },
+    "output": {
+        "directory": "data/output",
+        "analysis_dir": "data/output/analysis",
+        "reports_dir": "data/output/reports",
+        "charts_dir": "data/output/charts"
+    },
+    "optimization": {
+        "max_iterations": 1000,
+        "convergence_threshold": 0.001,
+        "timeout_seconds": 300
+    },
+    "monte_carlo": {
+        "default_iterations": 1000,
+        "confidence_level": 0.95,
+        "random_seed": null
+    }
+} 
